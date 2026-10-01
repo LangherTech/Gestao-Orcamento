@@ -1,0 +1,20 @@
+{
+  "name": "edifica-gestao-de-obras",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de Gestão de Obras, Orçamentos e Financeiro - Edifica Soluções em Obras",
+  "scripts": {
+    "dev:frontend": "npm run --prefix frontend dev",
+    "build:frontend": "npm run --prefix frontend build",
+    "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000"
+  },
+  "keywords": [
+    "gestao-de-obras",
+    "orcamento",
+    "fastapi",
+    "react",
+    "supabase"
+  ],
+  "author": "Edifica Soluções em Obras",
+  "license": "Private"
+}
