@@ -42,7 +42,7 @@ async def create_etapa(etapa: EtapaCreate, user: dict = Depends(get_current_user
         raise HTTPException(status_code=500, detail="Database connection not available")
         
     data = etapa.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     
     # Format dates
     for field in ["data_prevista_inicio", "data_prevista_fim", "data_real_inicio", "data_real_fim"]:
@@ -96,7 +96,7 @@ async def create_checklist(checklist: ChecklistCreate, user: dict = Depends(get_
         raise HTTPException(status_code=500, detail="Database connection not available")
         
     data = checklist.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     # Pydantic models parse nested lists of models to dicts, but let's ensure it's serializable to JSON
     # Supabase python client handles it well if it's a list of dicts.
     

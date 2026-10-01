@@ -30,7 +30,7 @@ async def create_fornecedor(forn: FornecedorCreate, user: dict = Depends(get_cur
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
     data = forn.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     res = supabase.table("fornecedores").insert(data).execute()
     return res.data[0]
 
@@ -62,7 +62,7 @@ async def create_pedido(pedido: PedidoCompraCreate, user: dict = Depends(get_cur
         raise HTTPException(status_code=500, detail="DB Error")
     
     data = pedido.model_dump(exclude={"itens"})
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     if data.get("obra_id"): data["obra_id"] = str(data["obra_id"])
     if data.get("fornecedor_id"): data["fornecedor_id"] = str(data["fornecedor_id"])
     

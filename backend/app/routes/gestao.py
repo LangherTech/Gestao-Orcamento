@@ -29,7 +29,7 @@ async def create_empreiteiro(emp: EmpreiteiroBase, user: dict = Depends(get_curr
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
     data = emp.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     res = supabase.table("empreiteiros").insert(data).execute()
     return res.data[0]
 
@@ -64,7 +64,7 @@ async def create_contrato(contrato: ContratoEmpreiteiroBase, user: dict = Depend
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
     data = contrato.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     if data.get("obra_id"): data["obra_id"] = str(data["obra_id"])
     if data.get("empreiteiro_id"): data["empreiteiro_id"] = str(data["empreiteiro_id"])
     if data.get("data_assinatura"): data["data_assinatura"] = data["data_assinatura"].isoformat()
@@ -79,7 +79,7 @@ async def create_medicao(med: MedicaoCreate, user: dict = Depends(get_current_us
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
     data = med.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     data["contrato_id"] = str(data["contrato_id"])
     data["valor_pagar"] = data["quantidade_executada"] * data["preco_unitario"]
     

@@ -27,7 +27,12 @@ async def create_obra(obra: ObraCreate, user: dict = Depends(get_current_user)):
     """Cadastra uma nova obra."""
     supabase = get_supabase_client()
     data = obra.model_dump()
-    data["created_by"] = user.get("id")
+    # Só define created_by se o usuário NÃO for mock (dev), pois o UUID mock
+    # não existe em auth.users e viola a FK constraint.
+    if not user.get("is_mock"):
+        data["created_by"] = user.get("id")
+    else:
+        data.pop("created_by", None)
     # Se o total foi informado mas as categorias não, distribuímos automaticamente
     total = float(data.get("valor_aprovado") or 0)
     mat = float(data.get("orcamento_materiais") or 0)

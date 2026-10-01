@@ -76,7 +76,7 @@ async def create_receita(item: ReceitaCreate, user: dict = Depends(get_current_u
         raise HTTPException(status_code=500, detail="Database connection not available")
         
     data = item.model_dump()
-    data["created_by"] = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else user.get("id")
     data["data_receita"] = data["data_receita"].isoformat()
     
     res = supabase.table("receitas").insert(data).execute()
