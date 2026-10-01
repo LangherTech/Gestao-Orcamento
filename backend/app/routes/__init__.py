@@ -8,6 +8,7 @@ from .compras import router as compras_router
 from .gestao import router as gestao_router
 from .calendario import router as calendario_router
 from .dashboards import router as dashboards_router
+from .visitas import router as visitas_router
 
 __all__ = [
     "auth_router",
@@ -19,5 +20,6 @@ __all__ = [
     "compras_router",
     "gestao_router",
     "calendario_router",
-    "dashboards_router"
+    "dashboards_router",
+    "visitas_router"
 ]

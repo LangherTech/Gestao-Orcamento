@@ -22,6 +22,7 @@ export const navigationItems = [
   { id: 'compras', label: 'Compras & Insumos', icon: ShoppingCart },
   { id: 'gestao', label: 'Empreiteiros', icon: HardHat },
   { id: 'calendario', label: 'Equipe & Calendário', icon: Users2 },
+  { id: 'visitas', label: 'Visitas & Prospecção', icon: Building2 }, // Using Building2 or MapPin (not imported)
   { id: 'financeiro', label: 'Financeiro & Caixa', icon: DollarSign },
 ];
 

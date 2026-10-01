@@ -15,6 +15,7 @@ const GestaoPage = lazy(() => import('./pages/GestaoPage'));
 const CalendarioPage = lazy(() => import('./pages/CalendarioPage'));
 const FinanceiroPage = lazy(() => import('./pages/FinanceiroPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const VisitasPage = lazy(() => import('./pages/VisitasPage'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -202,6 +203,7 @@ export default function App() {
               {activeTab === 'compras' && <ComprasPage obras={obras} />}
               {activeTab === 'gestao' && <GestaoPage obras={obras} />}
               {activeTab === 'calendario' && <CalendarioPage obras={obras} />}
+              {activeTab === 'visitas' && <VisitasPage />}
               {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} />}
             </Suspense>
           </div>
