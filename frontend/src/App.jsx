@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import DashboardPage from './pages/DashboardPage';
-import ObrasPage from './pages/ObrasPage';
-import ServicosPage from './pages/ServicosPage';
-import CronogramaPage from './pages/CronogramaPage';
-import RDOPage from './pages/RDOPage';
-import ComprasPage from './pages/ComprasPage';
-import GestaoPage from './pages/GestaoPage';
-import CalendarioPage from './pages/CalendarioPage';
-import FinanceiroPage from './pages/FinanceiroPage';
 import api from './services/api';
+import { supabase } from './services/supabase';
+
+// Lazy loading the pages for better performance (Code Splitting)
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ObrasPage = lazy(() => import('./pages/ObrasPage'));
+const ServicosPage = lazy(() => import('./pages/ServicosPage'));
+const CronogramaPage = lazy(() => import('./pages/CronogramaPage'));
+const RDOPage = lazy(() => import('./pages/RDOPage'));
+const ComprasPage = lazy(() => import('./pages/ComprasPage'));
+const GestaoPage = lazy(() => import('./pages/GestaoPage'));
+const CalendarioPage = lazy(() => import('./pages/CalendarioPage'));
+const FinanceiroPage = lazy(() => import('./pages/FinanceiroPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedObraId, setSelectedObraId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Estados limpos iniciando do zero
   const [obras, setObras] = useState([]);
@@ -92,21 +99,66 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchData();
-    // Auto-refresh a cada 5 minutos conforme especificado na regra de negócio
-    const interval = setInterval(fetchData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [selectedObraId]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        localStorage.setItem('edifica_token', session.access_token);
+      }
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        localStorage.setItem('edifica_token', session.access_token);
+      } else {
+        localStorage.removeItem('edifica_token');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchData();
+      // Auto-refresh a cada 5 minutos conforme especificado na regra de negócio
+      const interval = setInterval(fetchData, 5 * 60 * 1000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedObraId, session]);
 
   const selectedObra = obras.find(o => o.id === selectedObraId) || null;
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-emerald-500">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-emerald-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+        </div>
+      }>
+        <LoginPage />
+      </Suspense>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 relative">
       {/* Barra Lateral de Navegação */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       {/* Conteúdo Principal */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden w-full">
         {/* Cabeçalho */}
         <Header 
           obras={obras}
@@ -114,36 +166,44 @@ export default function App() {
           setSelectedObraId={setSelectedObraId}
           onRefresh={fetchData}
           isRefreshing={isRefreshing}
+          user={session?.user}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
         {/* Corpo da Página */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            {activeTab === 'dashboard' && (
-              <DashboardPage 
-                selectedObra={selectedObra} 
-                kpis={kpis} 
-                lucratividadeObras={lucratividadeObras}
-                orcadoVsRealizado={orcadoVsRealizado} 
-              />
-            )}
-            {activeTab === 'obras' && (
-              <ObrasPage 
-                obras={obras} 
-                onRefresh={fetchData}
-                onSelectObra={(id) => {
-                  setSelectedObraId(id);
-                  setActiveTab('dashboard');
-                }} 
-              />
-            )}
-            {activeTab === 'servicos' && <ServicosPage />}
-            {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} />}
-            {activeTab === 'rdo' && <RDOPage />}
-            {activeTab === 'compras' && <ComprasPage obras={obras} />}
-            {activeTab === 'gestao' && <GestaoPage obras={obras} />}
-            {activeTab === 'calendario' && <CalendarioPage />}
-            {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} />}
+            <Suspense fallback={
+              <div className="flex items-center justify-center h-full pt-20 text-emerald-500">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+              </div>
+            }>
+              {activeTab === 'dashboard' && (
+                <DashboardPage 
+                  selectedObra={selectedObra} 
+                  kpis={kpis} 
+                  lucratividadeObras={lucratividadeObras}
+                  orcadoVsRealizado={orcadoVsRealizado} 
+                />
+              )}
+              {activeTab === 'obras' && (
+                <ObrasPage 
+                  obras={obras} 
+                  onRefresh={fetchData}
+                  onSelectObra={(id) => {
+                    setSelectedObraId(id);
+                    setActiveTab('dashboard');
+                  }} 
+                />
+              )}
+              {activeTab === 'servicos' && <ServicosPage />}
+              {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} />}
+              {activeTab === 'rdo' && <RDOPage />}
+              {activeTab === 'compras' && <ComprasPage obras={obras} />}
+              {activeTab === 'gestao' && <GestaoPage obras={obras} />}
+              {activeTab === 'calendario' && <CalendarioPage obras={obras} />}
+              {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} />}
+            </Suspense>
           </div>
         </main>
       </div>
