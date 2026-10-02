@@ -1027,6 +1027,8 @@ function OrcamentoModal({
       preco_unitario: Number(servico.preco_total) || 0,
       quantidade: 1,
       desconto_percentual: 0,
+      materiais: servico.servico_materiais || [],
+      mao_de_obra: servico.mao_de_obra || 0
     }]);
   };
 
@@ -1092,6 +1094,8 @@ function OrcamentoModal({
         preco_unitario: Number(s.preco_total) || 0,
         quantidade: 0,
         desconto_percentual: 0,
+        materiais: s.servico_materiais || [],
+        mao_de_obra: s.mao_de_obra || 0
       }));
     if (newItens.length > 0) {
       setItens(prev => [...prev, ...newItens]);
@@ -2456,7 +2460,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               <Plus className="w-4 h-4" />
               <span>Novo Orçamento</span>
             </button>
-          ) : (
+          ) : activeSubTab === 'servicos' ? (
             <button
               onClick={handleNewServico}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
@@ -2464,56 +2468,61 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               <Plus className="w-4 h-4" />
               <span>Novo Serviço</span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {/* Sub-Tabs de Navegação */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-        <button
-          onClick={() => setActiveSubTab('orcamentos')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
-            activeSubTab === 'orcamentos'
-              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Orçamentos & Propostas</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
-            {orcamentos.length}
-          </span>
-        </button>
+      {/* Sub-Tabs de Navegação — scroll horizontal no mobile */}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex items-center gap-1 border-b border-slate-800 pb-2 min-w-max">
+          <button
+            onClick={() => setActiveSubTab('orcamentos')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'orcamentos'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <FileText className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Orçamentos & Propostas</span>
+            <span className="sm:hidden">Orçamentos</span>
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
+              {orcamentos.length}
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('servicos')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-            activeSubTab === 'servicos'
-              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Catálogo de Serviços</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
-            {servicos.length}
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveSubTab('servicos')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'servicos'
+                ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Layers className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Catálogo de Serviços</span>
+            <span className="sm:hidden">Serviços</span>
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
+              {servicos.length}
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('tabela_valores')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-            activeSubTab === 'tabela_valores'
-              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-          }`}
-        >
-          <Package className="w-4 h-4 text-amber-400" />
-          <span>Tabela de Valores (Insumos)</span>
-          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
-            {materiais.length}
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveSubTab('tabela_valores')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'tabela_valores'
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Package className={`w-4 h-4 shrink-0 ${activeSubTab === 'tabela_valores' ? 'text-amber-400' : ''}`} />
+            <span className="hidden sm:inline">Tabela de Valores (Insumos)</span>
+            <span className="sm:hidden">Insumos</span>
+            <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
+              {materiais.length}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* ============================================================== */}

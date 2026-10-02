@@ -76,7 +76,7 @@ const formatCurrency = (value) =>
 // ========================================================
 // DISPARADOR DE IMPRESSÃO / GERAÇÃO DE PDF
 // ========================================================
-export function printPropostaComercial(data) {
+export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
   const {
     clienteNome = '',
     clienteEndereco = 'BLUMENAU',
@@ -98,8 +98,10 @@ export function printPropostaComercial(data) {
 
   const contatoExibicao = [clienteTelefone, clienteEmail].filter(Boolean).join(' • ') || clienteContato || '(47) 99138-7244';
 
-  const objetivoTexto = objetivoCustom || (itens.length > 0
-    ? `Execução dos serviços de ${itens.map(i => i.servico_nome).join(', ')} contemplando:`
+  const itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
+
+  const objetivoTexto = objetivoCustom || (itensAtivos.length > 0
+    ? `Execução dos serviços de ${itensAtivos.map(i => i.servico_nome).join(', ')} contemplando:`
     : 'Execução dos serviços especializados de construção civil e reforma contemplando:');
 
   const printWindow = window.open('', '_blank');
@@ -234,7 +236,7 @@ export function printPropostaComercial(data) {
 
             <div class="section-title">2. SERVIÇOS A EXECUTAR</div>
             <div style="margin-bottom: 12px;">
-              ${itens.length > 0 ? itens.map(i => `
+              ${itensAtivos.length > 0 ? itensAtivos.map(i => `
                 <div class="check-item">
                   <span class="check-mark">✓</span>
                   <span>${i.servico_nome}${i.quantidade > 1 ? ` (${i.quantidade} un)` : ''};</span>
@@ -278,17 +280,35 @@ export function printPropostaComercial(data) {
             </div>
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
-              ${itens.map(i => {
+              ${itensAtivos.map(i => {
                 const bdi = margemBdiPercentual || 0;
                 const imp = impostosPercentual || 0;
                 const fatorAcrescimo = 1 + ((bdi + imp) / 100);
                 const sub = i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
-                return `
+                const unitFinal = i.preco_unitario * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                
+                let html = `
                   <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 9.8pt; border-bottom: 1px dashed #e2e8f0;">
                     <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''}</span>
                     <span style="font-weight: 600;">${formatCurrency(sub)}</span>
                   </div>
                 `;
+
+                if (modoVisualizacao === 'detalhado') {
+                    html += `
+                      <div style="padding-left: 12px; margin-bottom: 8px; font-size: 8.5pt; color: #64748b; line-height: 1.4;">
+                        <div><span style="font-weight: 600;">Valor Unitário:</span> ${formatCurrency(unitFinal)}</div>
+                    `;
+                    if (i.mao_de_obra > 0) {
+                      html += `<div><span style="font-weight: 600;">Mão de Obra:</span> ${formatCurrency(i.mao_de_obra)}</div>`;
+                    }
+                    if (i.materiais && i.materiais.length > 0) {
+                      html += `<div style="margin-top: 3px;"><span style="font-weight: 600;">Materiais Inclusos:</span> ${i.materiais.map(m => m.material_nome || m.nome).join(', ')}</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                return html;
               }).join('')}
               <div style="display: flex; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 2px solid #cbd5e1; font-weight: 800; font-size: 11.5pt; color: #0e2744;">
                 <span>VALOR TOTAL:</span>
@@ -396,6 +416,7 @@ export function PropostaComercialPreviewModal({
   saving = false
 }) {
   const [currentPage, setCurrentPage] = useState(1); // 1, 2, 3 ou 0 (todos)
+  const [modoVisualizacao, setModoVisualizacao] = useState('resumido'); // 'resumido' ou 'detalhado'
 
   const {
     clienteNome = '',
@@ -417,9 +438,10 @@ export function PropostaComercialPreviewModal({
   } = data;
 
   const contatoExibicao = [clienteTelefone, clienteEmail].filter(Boolean).join(' • ') || clienteContato || '(47) 99138-7244';
+  const itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
 
-  const objetivoTexto = objetivoCustom || (itens.length > 0
-    ? `Execução dos serviços de ${itens.map(i => i.servico_nome).join(', ')} contemplando:`
+  const objetivoTexto = objetivoCustom || (itensAtivos.length > 0
+    ? `Execução dos serviços de ${itensAtivos.map(i => i.servico_nome).join(', ')} contemplando:`
     : 'Execução dos serviços especializados de construção civil e reforma contemplando:');
 
   return (
@@ -468,9 +490,24 @@ export function PropostaComercialPreviewModal({
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex bg-slate-900 border border-slate-700 rounded-xl p-1 mr-2 text-xs">
+            <button
+              onClick={() => setModoVisualizacao('resumido')}
+              className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'resumido' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Resumido
+            </button>
+            <button
+              onClick={() => setModoVisualizacao('detalhado')}
+              className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'detalhado' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Detalhado
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => printPropostaComercial(data)}
+            onClick={() => printPropostaComercial(data, modoVisualizacao)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -525,8 +562,8 @@ export function PropostaComercialPreviewModal({
 
               <div className="font-extrabold text-xs uppercase text-slate-900 mb-2">2. SERVIÇOS A EXECUTAR</div>
               <div className="space-y-1 text-xs text-slate-700 mb-4 pl-1">
-                {itens.length > 0 ? (
-                  itens.map((it, idx) => (
+                {itensAtivos.length > 0 ? (
+                  itensAtivos.map((it, idx) => (
                     <div key={idx} className="flex items-start gap-2">
                       <span className="font-black text-slate-900">✓</span>
                       <span>{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''};</span>
@@ -581,15 +618,38 @@ export function PropostaComercialPreviewModal({
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-5 space-y-1.5 text-xs">
-                {itens.map((it, idx) => {
+                {itensAtivos.length === 0 && (
+                  <div className="py-4 text-center text-slate-500 font-medium bg-amber-50 rounded-lg border border-amber-200 text-amber-700">
+                    Nenhum serviço com quantidade maior que zero para exibir.
+                    <br/><span className="text-[10px]">Itens com quantidade zerada não são impressos no PDF.</span>
+                  </div>
+                )}
+                {itensAtivos.map((it, idx) => {
                   const bdi = margemBdiPercentual || 0;
                   const imp = impostosPercentual || 0;
                   const fatorAcrescimo = 1 + ((bdi + imp) / 100);
                   const sub = it.preco_unitario * it.quantidade * (1 - (it.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                  const unitFinal = it.preco_unitario * (1 - (it.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                  
                   return (
-                    <div key={idx} className="flex justify-between py-1 border-b border-slate-200/60 last:border-0">
-                      <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''}</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(sub)}</span>
+                    <div key={idx} className="py-1 border-b border-slate-200/60 last:border-0">
+                      <div className="flex justify-between">
+                        <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''}</span>
+                        <span className="font-bold text-slate-900">{formatCurrency(sub)}</span>
+                      </div>
+                      {modoVisualizacao === 'detalhado' && (
+                        <div className="pl-3 mt-1 mb-1 text-[10px] text-slate-500 font-medium">
+                          <div><span className="font-semibold text-slate-700">Valor Unitário:</span> {formatCurrency(unitFinal)}</div>
+                          {it.mao_de_obra > 0 && (
+                            <div><span className="font-semibold text-slate-700">Mão de Obra:</span> {formatCurrency(it.mao_de_obra)}</div>
+                          )}
+                          {it.materiais && it.materiais.length > 0 && (
+                            <div className="mt-0.5 leading-tight">
+                              <span className="font-semibold text-slate-700">Materiais Inclusos:</span> {it.materiais.map(m => m.material_nome || m.nome).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
