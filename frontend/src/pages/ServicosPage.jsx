@@ -1074,6 +1074,30 @@ function OrcamentoModal({
     ));
   };
 
+  const handleLoadModel = (modelo) => {
+    if (!modelo) return;
+    const modelServicos = servicos.filter(s => s.categoria === modelo);
+    if (modelServicos.length === 0) {
+      alert(`Nenhum serviço encontrado para o modelo ${modelo}.`);
+      return;
+    }
+    const currentIds = new Set(itens.map(i => i.servico_id));
+    const newItens = modelServicos
+      .filter(s => !currentIds.has(s.id))
+      .map(s => ({
+        servico_id: s.id,
+        material_id: null,
+        tipo: 'servico',
+        servico_nome: s.nome,
+        preco_unitario: Number(s.preco_total) || 0,
+        quantidade: 0,
+        desconto_percentual: 0,
+      }));
+    if (newItens.length > 0) {
+      setItens(prev => [...prev, ...newItens]);
+    }
+  };
+
   const subtotalBruto = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade), 0);
   const totalDescontos = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade * (item.desconto_percentual / 100)), 0);
   const totalLiquido = subtotalBruto - totalDescontos;
@@ -1522,6 +1546,30 @@ function OrcamentoModal({
             </div>
           </div>
 
+          {/* Seleção de Modelo Rápido */}
+          <div className="p-3 bg-slate-800/40 border border-slate-700/60 rounded-xl flex items-center justify-between">
+            <div>
+              <h5 className="text-sm font-bold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                Carregar Modelo de Orçamento
+              </h5>
+              <p className="text-[10px] text-slate-400">Preencha os itens automaticamente com quantidades zeradas.</p>
+            </div>
+            <select
+              onChange={(e) => {
+                if(e.target.value) {
+                  handleLoadModel(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+              className="bg-slate-900 border border-emerald-500/30 text-emerald-400 text-xs rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
+            >
+              <option value="">+ Escolher Modelo</option>
+              <option value="Alvenaria Completa">Alvenaria Completa</option>
+              <option value="Drywall">Drywall</option>
+            </select>
+          </div>
+
           {/* Seleção de Itens (Serviços e Insumos) */}
           <div>
             <h4 className="text-sm font-bold text-white mb-2 flex items-center justify-between">
@@ -1721,7 +1769,7 @@ function OrcamentoModal({
                       <div>
                         <label className="text-[10px] text-slate-500 block uppercase font-semibold">Quantidade</label>
                         <input
-                          type="number" step="0.01" min="0.01"
+                          type="number" step="0.01" min="0"
                           value={item.quantidade}
                           onChange={(e) => handleUpdateItem(idx, 'quantidade', e.target.value)}
                           className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
