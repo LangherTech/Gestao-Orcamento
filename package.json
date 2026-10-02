@@ -4,9 +4,10 @@
   "private": true,
   "description": "Sistema de Gestão de Obras, Orçamentos e Financeiro - Edifica Soluções em Obras",
   "scripts": {
+    "dev": "npm run dev:backend & npm run dev:frontend",
     "dev:frontend": "npm run --prefix frontend dev",
     "build:frontend": "npm run --prefix frontend build",
-    "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000"
+    "dev:backend": "cd backend && (./venv/bin/uvicorn app.main:app --reload --port 8000 2>/dev/null || uvicorn app.main:app --reload --port 8000)"
   },
   "keywords": [
     "gestao-de-obras",

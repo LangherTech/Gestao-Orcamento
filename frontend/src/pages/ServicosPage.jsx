@@ -26,6 +26,58 @@ const CATEGORIAS_PADRAO = [
   'Cobertura',
 ];
 
+const FALLBACK_MATERIAIS = [
+  { id: 'm001', nome: 'Placa Drywall Standard ST 12.5mm', unidade: 'm²', preco_medio: 22.50 },
+  { id: 'm002', nome: 'Perfil Guia 70mm', unidade: 'barra', preco_medio: 18.90 },
+  { id: 'm003', nome: 'Perfil Montante 70mm', unidade: 'barra', preco_medio: 17.50 },
+  { id: 'm004', nome: 'Massa de Acabamento para Gesso', unidade: 'saco', preco_medio: 42.00 },
+  { id: 'm005', nome: 'Tinta Acrílica Premium Suvinil 18L', unidade: 'lata', preco_medio: 320.00 },
+  { id: 'm006', nome: 'Fundo Preparador 18L', unidade: 'lata', preco_medio: 95.00 },
+  { id: 'm007', nome: 'Lixa para Parede 100', unidade: 'un', preco_medio: 2.50 },
+  { id: 'm008', nome: 'Fita Telada Adesiva 50mm', unidade: 'rolo', preco_medio: 14.00 },
+  { id: 'm009', nome: 'Arame Galvanizado 18', unidade: 'kg', preco_medio: 18.00 },
+  { id: 'm010', nome: 'Gesso Cola 1kg', unidade: 'saco', preco_medio: 8.50 },
+  { id: 'm011', nome: 'Cimento Portland CP-II (50kg)', unidade: 'saco', preco_medio: 34.90 },
+  { id: 'm012', nome: 'Argamassa AC-II (20kg)', unidade: 'saco', preco_medio: 26.50 },
+  { id: 'm013', nome: 'Areia Média', unidade: 'm³', preco_medio: 110.00 }
+];
+
+const FALLBACK_SERVICOS = [
+  {
+    id: 's001',
+    obra_id: null,
+    nome: 'Parede Drywall Standard (120mm)',
+    descricao: 'Parede em drywall com estrutura metálica 70mm e placa ST 12.5mm em ambos os lados.',
+    categoria: 'Gesso e Drywall',
+    preco_total: 145.00,
+    margem_lucro: 25.00,
+    mao_de_obra: 45.00,
+    servico_materiais: []
+  },
+  {
+    id: 's002',
+    obra_id: null,
+    nome: 'Pintura Acrílica Interna (2 Demãos)',
+    descricao: 'Aplicação de selador e 2 demãos de tinta acrílica premium em paredes internas.',
+    categoria: 'Pintura e Acabamento',
+    preco_total: 35.00,
+    margem_lucro: 30.00,
+    mao_de_obra: 22.00,
+    servico_materiais: []
+  },
+  {
+    id: 's003',
+    obra_id: null,
+    nome: 'Assentamento de Piso Porcelanato',
+    descricao: 'Instalação de porcelanato com argamassa colante AC-III e rejuntamento.',
+    categoria: 'Pisos e Revestimentos',
+    preco_total: 85.00,
+    margem_lucro: 20.00,
+    mao_de_obra: 55.00,
+    servico_materiais: []
+  }
+];
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
@@ -685,6 +737,7 @@ function OrcamentoModal({
   obras = [],
   onSaveSuccess,
   onMaterialCreated,
+  onRefreshCatalog = null,
   initialOrcamento = null,
   readOnlyView = false
 }) {
@@ -1304,8 +1357,29 @@ function OrcamentoModal({
                   filteredItems.push(...m.map(i => ({ ...i, tipo: 'Insumo' })));
                 }
 
+                if (servicos.length === 0 && materiais.length === 0) {
+                  return (
+                    <div className="p-4 text-center">
+                      <p className="text-xs text-amber-400 mb-2">Nenhum serviço ou insumo carregado no momento.</p>
+                      {onRefreshCatalog && (
+                        <button
+                          type="button"
+                          onClick={onRefreshCatalog}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          Recarregar catálogo
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
                 if (filteredItems.length === 0) {
-                  return <p className="text-xs text-slate-500 p-3 text-center">Nenhum item encontrado na busca.</p>;
+                  return (
+                    <p className="text-xs text-slate-500 p-3 text-center">
+                      {term ? `Nenhum item encontrado para "${itemSearchTerm}".` : 'Nenhum item cadastrado nesta categoria.'}
+                    </p>
+                  );
                 }
 
                 return filteredItems.map(item => {
@@ -1551,12 +1625,32 @@ function OrcamentoModal({
 // ========================================
 export default function ServicosPage() {
   const [activeSubTab, setActiveSubTab] = useState('orcamentos'); // 'orcamentos' ou 'servicos'
-  const [servicos, setServicos] = useState([]);
-  const [materiais, setMateriais] = useState([]);
-  const [categorias, setCategorias] = useState([]);
+  const [servicos, setServicos] = useState(() => {
+    try {
+      const cached = localStorage.getItem('edifica_cached_servicos');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return FALLBACK_SERVICOS;
+  });
+
+  const [materiais, setMateriais] = useState(() => {
+    try {
+      const cached = localStorage.getItem('edifica_cached_materiais');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return FALLBACK_MATERIAIS;
+  });
+
+  const [categorias, setCategorias] = useState(CATEGORIAS_PADRAO);
   const [orcamentos, setOrcamentos] = useState([]);
   const [obras, setObras] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -1620,13 +1714,25 @@ export default function ServicosPage() {
         api.get('/obras'),
       ]);
 
-      if (servicosRes.status === 'fulfilled') setServicos(servicosRes.value.data || []);
-      if (materiaisRes.status === 'fulfilled') setMateriais(materiaisRes.value.data || []);
-      if (categoriasRes.status === 'fulfilled') setCategorias(categoriasRes.value.data || []);
-      if (orcamentosRes.status === 'fulfilled') setOrcamentos(orcamentosRes.value.data || []);
-      if (obrasRes.status === 'fulfilled') setObras(obrasRes.value.data || []);
+      if (servicosRes.status === 'fulfilled' && Array.isArray(servicosRes.value.data) && servicosRes.value.data.length > 0) {
+        setServicos(servicosRes.value.data);
+        try { localStorage.setItem('edifica_cached_servicos', JSON.stringify(servicosRes.value.data)); } catch {}
+      }
+      if (materiaisRes.status === 'fulfilled' && Array.isArray(materiaisRes.value.data) && materiaisRes.value.data.length > 0) {
+        setMateriais(materiaisRes.value.data);
+        try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(materiaisRes.value.data)); } catch {}
+      }
+      if (categoriasRes.status === 'fulfilled' && Array.isArray(categoriasRes.value.data) && categoriasRes.value.data.length > 0) {
+        setCategorias(categoriasRes.value.data);
+      }
+      if (orcamentosRes.status === 'fulfilled' && Array.isArray(orcamentosRes.value.data)) {
+        setOrcamentos(orcamentosRes.value.data);
+      }
+      if (obrasRes.status === 'fulfilled' && Array.isArray(obrasRes.value.data)) {
+        setObras(obrasRes.value.data);
+      }
     } catch (err) {
-      console.log('Operando com dados locais:', err);
+      console.log('Operando com dados locais/cache:', err);
     } finally {
       setLoading(false);
     }
@@ -2282,7 +2388,14 @@ export default function ServicosPage() {
         materiais={materiais}
         obras={obras}
         onSaveSuccess={handleOrcamentoSaved}
-        onMaterialCreated={(newMat) => setMateriais(prev => [...prev, newMat])}
+        onMaterialCreated={(newMat) => {
+          setMateriais(prev => {
+            const updated = [...prev, newMat];
+            try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+        }}
+        onRefreshCatalog={fetchData}
         initialOrcamento={selectedOrcamento}
         readOnlyView={readOnlyViewOrcamento}
       />

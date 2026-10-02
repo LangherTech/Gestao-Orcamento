@@ -47,7 +47,7 @@ export default function Header({ obras, selectedObraId, setSelectedObraId, onRef
           <option value="">🏢 Todas as Obras</option>
           {obras.map((obra) => (
             <option key={obra.id} value={obra.id}>
-              {obra.nome}
+              {obra.nome}{obra.status === 'concluida' ? ' (Concluída)' : ''}{obra.arquivada ? ' (Arquivada)' : ''}
             </option>
           ))}
         </select>

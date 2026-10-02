@@ -15,7 +15,8 @@ class ObraBase(BaseModel):
     orcamento_materiais: float = Field(0.00, ge=0)
     orcamento_empreiteiros: float = Field(0.00, ge=0)
     orcamento_caixa: float = Field(0.00, ge=0)
-    status: str = Field("ativa", description="ativa, concluida ou cancelada")
+    status: str = Field("ativa", description="ativa ou concluida (obra iniciada não é cancelada)")
+    arquivada: bool = Field(False, description="Flag visual para não poluir a tela principal")
 
 class ObraCreate(ObraBase):
     pass
@@ -33,6 +34,13 @@ class ObraUpdate(BaseModel):
     orcamento_empreiteiros: Optional[float] = None
     orcamento_caixa: Optional[float] = None
     status: Optional[str] = None
+    arquivada: Optional[bool] = None
+
+class ObraStatusUpdate(BaseModel):
+    status: str = Field(..., description="Status da obra: 'ativa' ou 'concluida'")
+
+class ObraArquivarUpdate(BaseModel):
+    arquivada: Optional[bool] = Field(None, description="Flag de arquivamento. Se nulo, inverte o valor atual")
 
 class ObraResponse(ObraBase):
     id: UUID
@@ -42,3 +50,4 @@ class ObraResponse(ObraBase):
 
     class Config:
         from_attributes = True
+

@@ -74,7 +74,7 @@ export default function App() {
     setIsRefreshing(true);
     try {
       const [obrasRes, kpisRes, lucroRes, orcadoRes] = await Promise.allSettled([
-        api.get('/obras'),
+        api.get('/obras?arquivada=all'),
         api.get(`/dashboards/kpis${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`),
         api.get('/dashboards/lucratividade-por-obra'),
         api.get(`/dashboards/orcado-vs-realizado${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`)
