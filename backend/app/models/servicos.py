@@ -62,21 +62,28 @@ class ServicoBase(BaseModel):
     descricao: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=100)
     unidade: str = Field("Unidade", max_length=50)
-    preco_total: float = Field(0.00, ge=0)
-    margem_lucro: float = Field(0.00, ge=0)
-    mao_de_obra: float = Field(0.00, ge=0)
+    preco_total: float = Field(0.00, ge=0, description="Preço final de venda ao cliente por unidade (ex: R$ 70,00)")
+    margem_lucro: float = Field(0.00, description="% de margem de lucro sobre a venda calculada automaticamente")
+    mao_de_obra: float = Field(0.00, ge=0, description="Custo da mão de obra do terceiro/empreiteiro por unidade (ex: R$ 50,00)")
 
 class ServicoCreate(ServicoBase):
     materiais: Optional[List[ServicoMaterialInput]] = []
 
 class ServicoUpdate(BaseModel):
+    obra_id: Optional[UUID] = None
     nome: Optional[str] = Field(None, max_length=255)
     descricao: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=100)
     unidade: Optional[str] = Field(None, max_length=50)
     preco_total: Optional[float] = Field(None, ge=0)
-    margem_lucro: Optional[float] = Field(None, ge=0)
+    margem_lucro: Optional[float] = None
     mao_de_obra: Optional[float] = Field(None, ge=0)
+    materiais: Optional[List[ServicoMaterialInput]] = None
+
+class ServicoValoresUpdate(BaseModel):
+    preco_total: Optional[float] = Field(None, ge=0, description="Preço de venda ao cliente")
+    mao_de_obra: Optional[float] = Field(None, ge=0, description="Custo da mão de obra do terceiro")
+    margem_lucro: Optional[float] = Field(None, description="% margem de lucro")
 
 class ServicoResponse(ServicoBase):
     id: UUID
@@ -94,6 +101,7 @@ class ServicoResponse(ServicoBase):
 class OrcamentoItemInput(BaseModel):
     servico_id: Optional[UUID] = None
     material_id: Optional[UUID] = None
+    tipo: str = Field("servico", description="servico ou insumo")
     descricao: Optional[str] = None
     quantidade: float = Field(1.0, gt=0)
     preco_unitario: Optional[float] = Field(0.0, ge=0)
@@ -104,6 +112,7 @@ class OrcamentoItemResponse(BaseModel):
     orcamento_id: Optional[str] = None
     servico_id: Optional[str] = None
     material_id: Optional[str] = None
+    tipo: str = "servico"
     descricao: str
     quantidade: float
     preco_unitario: float

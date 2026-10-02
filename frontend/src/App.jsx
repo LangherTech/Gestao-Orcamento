@@ -24,6 +24,24 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [pendingOrcamentoData, setPendingOrcamentoData] = useState(null);
+
+  const handleCreateOrcamentoFromVisita = (visita) => {
+    setPendingOrcamentoData({
+      cliente_nome: visita.nome || '',
+      pessoa_contato: visita.pessoa_contato || '',
+      cliente_telefone: visita.telefone || visita.contato || '',
+      cliente_email: visita.email || '',
+      cliente_endereco: visita.endereco || '',
+      visita_id: visita.id,
+      notas: visita.observacao ? `Visita de Prospecção (${visita.data_visita || 'recente'}): ${visita.observacao}` : '',
+      status: 'rascunho',
+      prazo_dias: 10,
+      prazo_garantia: '12 (doze) meses',
+      validade_dias: 15
+    });
+    setActiveTab('servicos');
+  };
 
   // Estados limpos iniciando do zero
   const [obras, setObras] = useState([]);
@@ -197,13 +215,23 @@ export default function App() {
                   }} 
                 />
               )}
-              {activeTab === 'servicos' && <ServicosPage />}
+              {activeTab === 'servicos' && (
+                <ServicosPage 
+                  initialOrcamentoData={pendingOrcamentoData}
+                  onClearInitialOrcamentoData={() => setPendingOrcamentoData(null)}
+                />
+              )}
               {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} />}
               {activeTab === 'rdo' && <RDOPage />}
               {activeTab === 'compras' && <ComprasPage obras={obras} />}
               {activeTab === 'gestao' && <GestaoPage obras={obras} />}
               {activeTab === 'calendario' && <CalendarioPage obras={obras} />}
-              {activeTab === 'visitas' && <VisitasPage />}
+              {activeTab === 'visitas' && (
+                <VisitasPage 
+                  user={session?.user} 
+                  onCreateOrcamento={handleCreateOrcamentoFromVisita} 
+                />
+              )}
               {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} />}
             </Suspense>
           </div>

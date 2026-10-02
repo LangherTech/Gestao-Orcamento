@@ -26,6 +26,20 @@ const CATEGORIAS_PADRAO = [
   'Cobertura',
 ];
 
+const UNIDADES_INSUMO = [
+  { value: 'm²', label: 'M² (Metro Quadrado)' },
+  { value: 'm', label: 'ML (Metro Linear)' },
+  { value: 'm³', label: 'M³ (Metro Cúbico)' },
+  { value: 'un', label: 'Unidade (un)' },
+  { value: 'saco', label: 'Saco' },
+  { value: 'barra', label: 'Barra' },
+  { value: 'lata', label: 'Lata' },
+  { value: 'rolo', label: 'Rolo' },
+  { value: 'kg', label: 'Kg (Quilograma)' },
+  { value: 'cx', label: 'Caixa (cx)' },
+  { value: 'par', label: 'Par' }
+];
+
 const FALLBACK_MATERIAIS = [
   { id: 'm001', nome: 'Placa Drywall Standard ST 12.5mm', unidade: 'm²', preco_medio: 22.50 },
   { id: 'm002', nome: 'Perfil Guia 70mm', unidade: 'barra', preco_medio: 18.90 },
@@ -178,6 +192,12 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
   const [expanded, setExpanded] = useState(false);
   const materiais = servico.servico_materiais || [];
   const custoMateriais = materiais.reduce((sum, m) => sum + (m.subtotal || m.quantidade * m.preco_unitario || 0), 0);
+  const custoTerceiro = Number(servico.mao_de_obra) || 0;
+  const custoTotal = custoMateriais + custoTerceiro;
+  const precoVenda = Number(servico.preco_total) || 0;
+  const lucroBruto = precoVenda - custoTotal;
+  const margemReal = precoVenda > 0 ? (lucroBruto / precoVenda) * 100 : Number(servico.margem_lucro) || 0;
+  const unidadeSigla = servico.unidade === 'm' ? 'ML' : (servico.unidade || 'Unidade');
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden group">
@@ -188,6 +208,9 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
                 {servico.categoria || 'Geral'}
+              </span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                {unidadeSigla}
               </span>
               {servico.obra_id && (
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -202,22 +225,31 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
           </div>
 
           {/* Métricas */}
-          <div className="flex items-center gap-6 md:text-right shrink-0">
+          <div className="flex items-center gap-5 md:text-right shrink-0 flex-wrap sm:flex-nowrap">
             <div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Preço Final</span>
-              <span className="text-lg font-bold text-emerald-400">{formatCurrency(servico.preco_total)}</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Preço de Venda</span>
+              <span className="text-lg font-bold text-emerald-400">
+                {formatCurrency(precoVenda)}
+                <span className="text-xs font-normal text-emerald-500/70 ml-1">/ {unidadeSigla}</span>
+              </span>
             </div>
             <div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Mão de Obra</span>
-              <span className="text-sm font-semibold text-slate-200">{formatCurrency(servico.mao_de_obra)}</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Margem</span>
-              <span className="text-sm font-semibold text-purple-300">{formatPercent(servico.margem_lucro)}</span>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Custo Terceiro</span>
+              <span className="text-sm font-semibold text-slate-200">{formatCurrency(custoTerceiro)}</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Materiais</span>
               <span className="text-sm font-semibold text-amber-300">{formatCurrency(custoMateriais)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Lucro Bruto</span>
+              <span className={`text-sm font-bold ${lucroBruto >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {lucroBruto >= 0 ? '+' : ''}{formatCurrency(lucroBruto)}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Margem</span>
+              <span className="text-sm font-semibold text-purple-300">{formatPercent(margemReal)}</span>
             </div>
           </div>
         </div>
@@ -333,14 +365,75 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   const [savingMaterial, setSavingMaterial] = useState(false);
   const [localMateriais, setLocalMateriais] = useState(materiais);
 
-  const custoMateriais = composicao.reduce((sum, m) => sum + (m.quantidade * m.preco_unitario), 0);
-  const custoTotal = custoMateriais + (form.mao_de_obra || 0);
-  const precoComMargem = custoTotal * (1 + (form.margem_lucro || 0) / 100);
+  // Cálculos reativos em tempo real
+  const custoMateriais = useMemo(() => {
+    return composicao.reduce((sum, m) => sum + ((Number(m.quantidade) || 0) * (Number(m.preco_unitario) || 0)), 0);
+  }, [composicao]);
 
-  // Calcular preço total automaticamente
-  useEffect(() => {
-    setForm(prev => ({ ...prev, preco_total: Math.round(precoComMargem * 100) / 100 }));
-  }, [precoComMargem]);
+  const custoTerceiro = Number(form.mao_de_obra) || 0;
+  const custoTotalDireto = custoMateriais + custoTerceiro;
+  const precoVenda = Number(form.preco_total) || 0;
+  const lucroBruto = precoVenda - custoTotalDireto;
+  const margemSobreVenda = precoVenda > 0 ? (lucroBruto / precoVenda) * 100 : 0;
+  const markupSobreCusto = custoTotalDireto > 0 ? (lucroBruto / custoTotalDireto) * 100 : 0;
+
+  // Handlers bidirecionais
+  const handleMaoDeObraChange = (val) => {
+    const valNum = parseFloat(val) || 0;
+    const novoCustoTotal = custoMateriais + valNum;
+    setForm(prev => {
+      const pv = Number(prev.preco_total) || 0;
+      let novaMargem = Number(prev.margem_lucro) || 0;
+      if (pv > 0) {
+        novaMargem = Math.round(((pv - novoCustoTotal) / pv) * 1000) / 10;
+      }
+      return {
+        ...prev,
+        mao_de_obra: valNum,
+        margem_lucro: novaMargem
+      };
+    });
+  };
+
+  const handlePrecoVendaChange = (val) => {
+    const valNum = parseFloat(val) || 0;
+    setForm(prev => {
+      const ct = custoMateriais + (Number(prev.mao_de_obra) || 0);
+      const novaMargem = valNum > 0 ? Math.round(((valNum - ct) / valNum) * 1000) / 10 : 0;
+      return {
+        ...prev,
+        preco_total: valNum,
+        margem_lucro: novaMargem
+      };
+    });
+  };
+
+  const handleMargemChange = (val) => {
+    const valNum = parseFloat(val) || 0;
+    setForm(prev => {
+      const ct = custoMateriais + (Number(prev.mao_de_obra) || 0);
+      let novoPreco = prev.preco_total;
+      if (valNum < 100 && ct > 0) {
+        novoPreco = Math.round((ct / (1 - (valNum / 100))) * 100) / 100;
+      }
+      return {
+        ...prev,
+        margem_lucro: valNum,
+        preco_total: novoPreco
+      };
+    });
+  };
+
+  const handleApplyMarkup = (markupPercent) => {
+    const ct = custoMateriais + (Number(form.mao_de_obra) || 0);
+    const novoPreco = Math.round(ct * (1 + markupPercent / 100) * 100) / 100;
+    const novaMargem = novoPreco > 0 ? Math.round(((novoPreco - ct) / novoPreco) * 1000) / 10 : 0;
+    setForm(prev => ({
+      ...prev,
+      preco_total: novoPreco,
+      margem_lucro: novaMargem
+    }));
+  };
 
   const handleAddMaterial = (material) => {
     setComposicao(prev => [...prev, {
@@ -403,7 +496,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
 
   return (
     <div className="space-y-6">
-      {/* Dados Básicos */}
+      {/* 1. Dados Básicos */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <label className="block text-xs font-semibold text-slate-400 mb-1.5">Nome do Serviço *</label>
@@ -411,20 +504,11 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
             type="text"
             value={form.nome}
             onChange={(e) => setForm({ ...form, nome: e.target.value })}
-            placeholder="Ex: Parede Drywall Standard 120mm"
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+            placeholder="Ex: Instalação de Porcelanato 60x60"
+            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all font-medium"
           />
         </div>
-        <div className="md:col-span-2">
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">Descrição</label>
-          <textarea
-            value={form.descricao || ''}
-            onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-            rows={2}
-            placeholder="Descrição detalhada do serviço..."
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
-          />
-        </div>
+
         <div>
           <label className="block text-xs font-semibold text-slate-400 mb-1.5">Categoria</label>
           <select
@@ -438,77 +522,164 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
             ))}
           </select>
         </div>
+
         <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">Unidade</label>
+          <label className="block text-xs font-semibold text-slate-400 mb-1.5">
+            Unidade de Medida
+          </label>
           <select
-            value={form.unidade || 'Unidade'}
+            value={form.unidade === 'm' ? 'ML' : (form.unidade || 'Unidade')}
             onChange={(e) => setForm({ ...form, unidade: e.target.value })}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all cursor-pointer"
+            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all cursor-pointer font-semibold"
           >
             {['ML', 'M²', 'M³', 'Unidade'].map(u => (
               <option key={u} value={u}>{u}</option>
             ))}
           </select>
+          <span className="text-[10px] text-slate-500 mt-1 block">ML unifica M e ML (metro linear)</span>
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-            <span className="flex items-center gap-1.5"><Wrench className="w-3 h-3" /> Mão de Obra (R$)</span>
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={form.mao_de_obra}
-            onChange={(e) => setForm({ ...form, mao_de_obra: parseFloat(e.target.value) || 0 })}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
+
+        <div className="md:col-span-2">
+          <label className="block text-xs font-semibold text-slate-400 mb-1.5">Descrição / Detalhes de Execução</label>
+          <textarea
+            value={form.descricao || ''}
+            onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+            rows={2}
+            placeholder="Detalhes técnicos, observações de execução e acabamento..."
+            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all resize-none"
           />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-            <span className="flex items-center gap-1.5"><Percent className="w-3 h-3" /> Margem de Lucro (%)</span>
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            min="0"
-            max="100"
-            value={form.margem_lucro}
-            onChange={(e) => setForm({ ...form, margem_lucro: parseFloat(e.target.value) || 0 })}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-            <span className="flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Preço Final Calculado</span>
-          </label>
-          <div className="w-full bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-2.5 text-sm text-emerald-400 font-bold">
-            {formatCurrency(form.preco_total)}
-          </div>
         </div>
       </div>
 
-      {/* Resumo de Custos */}
-      <div className="glass-card rounded-xl p-4 border border-slate-700/40">
-        <div className="flex items-center gap-2 mb-3">
-          <Calculator className="w-4 h-4 text-emerald-400" />
-          <span className="text-sm font-bold text-white">Resumo de Composição de Custo</span>
+      {/* 2. Precificação e Custos (Separação Clara) */}
+      <div className="glass-card rounded-2xl p-5 border border-slate-700/60 bg-slate-900/50 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-bold text-white">Precificação e Custos</span>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            Cálculo bidirecional: Custo Terceiro vs. Venda Cliente
+          </span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-          <div className="p-2.5 rounded-lg bg-slate-900/40 border border-slate-800/60">
-            <span className="text-slate-500 block mb-0.5">Materiais</span>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Custo Mão de Obra / Terceiro */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <span className="flex items-center gap-1.5 text-blue-400">
+                <Wrench className="w-3.5 h-3.5" />
+                Custo Mão de Obra / Terceiro (R$) *
+              </span>
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.mao_de_obra}
+              onChange={(e) => handleMaoDeObraChange(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 font-semibold"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Valor pago ao prestador por unidade</p>
+          </div>
+
+          {/* Preço de Venda ao Cliente */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <DollarSign className="w-3.5 h-3.5" />
+                Preço de Venda ao Cliente (R$) *
+              </span>
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.preco_total}
+              onChange={(e) => handlePrecoVendaChange(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-emerald-950/30 border border-emerald-500/60 rounded-xl px-4 py-2.5 text-sm text-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-bold"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Valor cobrado na proposta/orçamento</p>
+          </div>
+
+          {/* Margem de Lucro % sobre Venda */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <span className="flex items-center gap-1.5 text-purple-400">
+                <Percent className="w-3.5 h-3.5" />
+                % Margem s/ Venda
+              </span>
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={form.margem_lucro}
+              onChange={(e) => handleMargemChange(e.target.value)}
+              className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 font-semibold"
+            />
+            <p className="text-[10px] text-slate-500 mt-1">Sincronizado automaticamente</p>
+          </div>
+        </div>
+
+        {/* Atalhos rápidos de Markup sobre custo */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/60">
+          <span className="text-[11px] text-slate-400 font-medium">Calcular por Markup sobre Custo:</span>
+          {[20, 30, 40, 50, 60].map(pct => (
+            <button
+              key={pct}
+              type="button"
+              onClick={() => handleApplyMarkup(pct)}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer"
+            >
+              +{pct}%
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Resumo de Composição de Custo */}
+      <div className="glass-card rounded-2xl p-4 border border-slate-700/50 bg-slate-900/60">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Resumo de Composição de Custo</span>
+          </div>
+          <span className="text-xs font-bold text-slate-400">
+            Unidade: <span className="text-emerald-400 font-semibold">{form.unidade === 'm' ? 'ML' : (form.unidade || 'Unidade')}</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
+            <span className="text-slate-400 block text-[11px] mb-1">Materiais</span>
             <span className="text-amber-300 font-bold text-sm">{formatCurrency(custoMateriais)}</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-slate-900/40 border border-slate-800/60">
-            <span className="text-slate-500 block mb-0.5">Mão de Obra</span>
-            <span className="text-blue-300 font-bold text-sm">{formatCurrency(form.mao_de_obra)}</span>
+
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
+            <span className="text-slate-400 block text-[11px] mb-1">Mão de Obra (Terceiro)</span>
+            <span className="text-blue-400 font-bold text-sm">{formatCurrency(custoTerceiro)}</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-slate-900/40 border border-slate-800/60">
-            <span className="text-slate-500 block mb-0.5">Custo Total</span>
-            <span className="text-slate-200 font-bold text-sm">{formatCurrency(custoTotal)}</span>
+
+          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
+            <span className="text-slate-400 block text-[11px] mb-1">Custo Total Direto</span>
+            <span className="text-slate-200 font-bold text-sm">{formatCurrency(custoTotalDireto)}</span>
           </div>
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <span className="text-emerald-500/80 block mb-0.5">+ Margem {formatPercent(form.margem_lucro)}</span>
-            <span className="text-emerald-400 font-bold text-sm">{formatCurrency(form.preco_total)}</span>
+
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+            <span className="text-emerald-400 block text-[11px] mb-1">Preço Venda ao Cliente</span>
+            <span className="text-emerald-400 font-bold text-sm">{formatCurrency(precoVenda)}</span>
+          </div>
+
+          <div className={`p-3 rounded-xl col-span-2 md:col-span-1 border ${lucroBruto >= 0 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-red-500/15 border-red-500/40 text-red-300'}`}>
+            <span className="block text-[11px] mb-1 font-medium">Lucro / Margem</span>
+            <span className="font-bold text-sm block">
+              {lucroBruto >= 0 ? '+' : ''}{formatCurrency(lucroBruto)}
+            </span>
+            <span className="text-[10px] opacity-80 block font-medium">
+              {margemSobreVenda.toFixed(1)}% margem | {markupSobreCusto.toFixed(1)}% markup
+            </span>
           </div>
         </div>
       </div>
@@ -743,6 +914,7 @@ function OrcamentoModal({
 }) {
   const [itens, setItens] = useState([]);
   const [clienteNome, setClienteNome] = useState('');
+  const [pessoaContato, setPessoaContato] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
   const [clienteEmail, setClienteEmail] = useState('');
   const [clienteEndereco, setClienteEndereco] = useState('BLUMENAU / SC');
@@ -755,6 +927,8 @@ function OrcamentoModal({
   const [observacoes, setObservacoes] = useState('');
   const [notas, setNotas] = useState('');
   const [validadeDias, setValidadeDias] = useState(15);
+  const [margemBdiPercentual, setMargemBdiPercentual] = useState(15.0);
+  const [impostosPercentual, setImpostosPercentual] = useState(20.5);
   const [step, setStep] = useState(1); // 1: edição/seleção, 2: preview/PDF
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -774,6 +948,7 @@ function OrcamentoModal({
     if (initialOrcamento) {
       setCurrentId(initialOrcamento.id);
       setClienteNome(initialOrcamento.cliente_nome || '');
+      setPessoaContato(initialOrcamento.pessoa_contato || '');
 
       // Extrai telefone e email (mesmo se vier do contato concatenado antigo)
       let tel = initialOrcamento.cliente_telefone || '';
@@ -805,10 +980,13 @@ function OrcamentoModal({
       setObservacoes(initialOrcamento.observacoes || '');
       setNotas(initialOrcamento.notas || '');
       setValidadeDias(initialOrcamento.validade_dias || 15);
+      setMargemBdiPercentual(initialOrcamento.margem_bdi_percentual ?? 15.0);
+      setImpostosPercentual(initialOrcamento.impostos_percentual ?? 20.5);
       setItens(
         (initialOrcamento.orcamento_itens || initialOrcamento.itens || []).map(it => ({
           servico_id: it.servico_id,
           material_id: it.material_id,
+          tipo: it.tipo || (it.material_id ? 'insumo' : 'servico'),
           servico_nome: it.descricao || it.servico_nome || 'Item',
           preco_unitario: Number(it.preco_unitario) || 0,
           quantidade: Number(it.quantidade) || 1,
@@ -830,6 +1008,8 @@ function OrcamentoModal({
       setObservacoes('');
       setNotas('');
       setValidadeDias(15);
+      setMargemBdiPercentual(15.0);
+      setImpostosPercentual(20.5);
       setItens([]);
       setStep(1);
       setCurrentId(null);
@@ -842,6 +1022,7 @@ function OrcamentoModal({
     setItens(prev => [...prev, {
       servico_id: servico.id,
       material_id: null,
+      tipo: 'servico',
       servico_nome: servico.nome,
       preco_unitario: Number(servico.preco_total) || 0,
       quantidade: 1,
@@ -854,6 +1035,7 @@ function OrcamentoModal({
     setItens(prev => [...prev, {
       servico_id: null,
       material_id: material.id,
+      tipo: 'insumo',
       servico_nome: material.nome,
       preco_unitario: Number(material.preco_medio) || 0,
       quantidade: 1,
@@ -895,6 +1077,8 @@ function OrcamentoModal({
   const subtotalBruto = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade), 0);
   const totalDescontos = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade * (item.desconto_percentual / 100)), 0);
   const totalLiquido = subtotalBruto - totalDescontos;
+  const fatorAcrescimo = 1 + ((margemBdiPercentual + impostosPercentual) / 100);
+  const valorTotalFinal = totalLiquido * fatorAcrescimo;
 
   const handleSaveOrcamento = async (statusOverride = null) => {
     if (!clienteNome.trim()) {
@@ -922,6 +1106,7 @@ function OrcamentoModal({
     try {
       const targetStatus = statusOverride || status;
       const contactParts = [];
+      if (pessoaContato.trim()) contactParts.push(`Contato: ${pessoaContato.trim()}`);
       if (clienteTelefone.trim()) contactParts.push(clienteTelefone.trim());
       if (clienteEmail.trim()) contactParts.push(clienteEmail.trim());
       const combinedContato = contactParts.join(' • ');
@@ -929,6 +1114,7 @@ function OrcamentoModal({
       const payload = {
         obra_id: obraId || null,
         cliente_nome: clienteNome.trim(),
+        pessoa_contato: pessoaContato.trim() || null,
         cliente_contato: combinedContato || null,
         cliente_telefone: clienteTelefone.trim() || null,
         cliente_email: clienteEmail.trim() || null,
@@ -940,9 +1126,12 @@ function OrcamentoModal({
         status: targetStatus,
         observacoes: observacoes.trim() || null,
         notas: notas.trim() || null,
+        margem_bdi_percentual: margemBdiPercentual,
+        impostos_percentual: impostosPercentual,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
+          tipo: i.tipo,
           descricao: i.servico_nome,
           quantidade: i.quantidade,
           preco_unitario: i.preco_unitario,
@@ -996,8 +1185,12 @@ function OrcamentoModal({
         status: status,
         observacoes: observacoes.trim() || null,
         notas: notas.trim() || null,
+        margem_bdi_percentual: margemBdiPercentual,
+        impostos_percentual: impostosPercentual,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
+          material_id: i.material_id || null,
+          tipo: i.tipo,
           descricao: i.servico_nome,
           quantidade: i.quantidade,
           preco_unitario: i.preco_unitario,
@@ -1100,13 +1293,23 @@ function OrcamentoModal({
               Identificação do Orçamento
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Cliente *</label>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Cliente / Razão Social *</label>
                 <input
                   type="text"
                   value={clienteNome}
                   onChange={(e) => setClienteNome(e.target.value)}
                   placeholder="Nome completo ou empresa"
+                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Pessoa de Contato (Responsável)</label>
+                <input
+                  type="text"
+                  value={pessoaContato}
+                  onChange={(e) => setPessoaContato(e.target.value)}
+                  placeholder="Ex: Eng. Marcos, Síndico Roberto"
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
@@ -1245,6 +1448,26 @@ function OrcamentoModal({
                   value={validadeDias}
                   onChange={(e) => setValidadeDias(parseInt(e.target.value) || 15)}
                   placeholder="15"
+                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Margem / BDI (%)</label>
+                <input
+                  type="number" step="0.1" min="0"
+                  value={margemBdiPercentual}
+                  onChange={(e) => setMargemBdiPercentual(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Impostos (%)</label>
+                <input
+                  type="number" step="0.1" min="0"
+                  value={impostosPercentual}
+                  onChange={(e) => setImpostosPercentual(parseFloat(e.target.value) || 0)}
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
@@ -1548,7 +1771,7 @@ function OrcamentoModal({
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] uppercase tracking-wider text-emerald-400 block font-bold">Valor Total da Proposta</span>
-                  <span className="text-2xl font-black text-emerald-400">{formatCurrency(totalLiquido)}</span>
+                  <span className="text-2xl font-black text-emerald-400">{formatCurrency(valorTotalFinal)}</span>
                 </div>
               </div>
             </div>
@@ -1599,7 +1822,9 @@ function OrcamentoModal({
               ? new Date(initialOrcamento.created_at).toLocaleDateString('pt-BR')
               : new Date().toLocaleDateString('pt-BR'),
             itens,
-            valorTotal: totalLiquido,
+            valorTotal: valorTotalFinal,
+            margemBdiPercentual,
+            impostosPercentual,
             validadeDias,
             prazoDias,
             prazoGarantia,
@@ -1623,7 +1848,7 @@ function OrcamentoModal({
 // ========================================
 // Componente Principal
 // ========================================
-export default function ServicosPage() {
+export default function ServicosPage({ initialOrcamentoData = null, onClearInitialOrcamentoData = null }) {
   const [activeSubTab, setActiveSubTab] = useState('orcamentos'); // 'orcamentos' ou 'servicos'
   const [servicos, setServicos] = useState(() => {
     try {
@@ -1654,6 +1879,18 @@ export default function ServicosPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
+  useEffect(() => {
+    if (initialOrcamentoData) {
+      setActiveSubTab('orcamentos');
+      setSelectedOrcamento(initialOrcamentoData);
+      setReadOnlyViewOrcamento(false);
+      setShowOrcamento(true);
+      if (onClearInitialOrcamentoData) {
+        onClearInitialOrcamentoData();
+      }
+    }
+  }, [initialOrcamentoData]);
+
   // Filtros de Serviços
   const [searchTerm, setSearchTerm] = useState('');
   const [categoriaFilter, setCategoriaFilter] = useState('');
@@ -1663,7 +1900,21 @@ export default function ServicosPage() {
   const [orcamentoStatusFilter, setOrcamentoStatusFilter] = useState('');
   const [orcamentoObraFilter, setOrcamentoObraFilter] = useState('');
 
-  // Modais
+  // Filtros e Edição da Tabela de Valores (Gestão Global de Insumos / Materiais)
+  const [tabelaSearch, setTabelaSearch] = useState('');
+  const [tabelaUnidadeFilter, setTabelaUnidadeFilter] = useState('');
+  const [inlineEditingId, setInlineEditingId] = useState(null);
+  const [inlineValores, setInlineValores] = useState({ preco_medio: '' });
+  const [savingValoresId, setSavingValoresId] = useState(null);
+
+  // Modais de Insumos (Tabela de Valores)
+  const [showInsumoModal, setShowInsumoModal] = useState(false);
+  const [editingInsumo, setEditingInsumo] = useState(null);
+  const [insumoForm, setInsumoForm] = useState({ nome: '', unidade: 'm²', preco_medio: '' });
+  const [savingInsumo, setSavingInsumo] = useState(false);
+  const [showDeleteInsumoConfirm, setShowDeleteInsumoConfirm] = useState(null);
+
+  // Modais de Serviços e Orçamentos
   const [showForm, setShowForm] = useState(false);
   const [editingServico, setEditingServico] = useState(null);
   const [showOrcamento, setShowOrcamento] = useState(false);
@@ -1680,6 +1931,82 @@ export default function ServicosPage() {
     const totalComposicoes = servicos.reduce((s, sv) => s + (sv.servico_materiais?.length || 0), 0);
     return { total, precoMedio, categoriasUnicas: categoriasUnicas.length, totalComposicoes };
   }, [servicos]);
+
+  // Stats da Tabela de Valores (Exclusiva para Insumos / Materiais)
+  const tabelaValoresStats = useMemo(() => {
+    const total = materiais.length;
+    const somaPrecoMedio = materiais.reduce((acc, m) => acc + (Number(m.preco_medio) || 0), 0);
+    const precoMedioInsumo = total > 0 ? somaPrecoMedio / total : 0;
+    const maiorPreco = materiais.reduce((max, m) => Math.max(max, Number(m.preco_medio) || 0), 0);
+
+    const insumosEmUsoSet = new Set();
+    servicos.forEach(s => {
+      (s.servico_materiais || []).forEach(sm => {
+        if (sm.material_id) insumosEmUsoSet.add(sm.material_id);
+      });
+    });
+    const insumosEmUso = insumosEmUsoSet.size;
+
+    return {
+      total,
+      precoMedioInsumo,
+      maiorPreco,
+      insumosEmUso
+    };
+  }, [materiais, servicos]);
+
+  // Contagem de serviços vinculados a um insumo
+  const getMaterialUsageCount = useCallback((materialId) => {
+    return servicos.filter(s =>
+      (s.servico_materiais || []).some(sm => sm.material_id === materialId)
+    ).length;
+  }, [servicos]);
+
+  // Recálculo em cascata: ao alterar o custo de um insumo globalmente,
+  // todos os serviços que o utilizam na composição têm o custo de material recalculado automaticamente
+  const cascadeRecalculateServicos = useCallback((materialId, novoPreco) => {
+    setServicos(prevServicos => {
+      const updated = prevServicos.map(s => {
+        const hasMaterial = (s.servico_materiais || []).some(sm => sm.material_id === materialId);
+        if (!hasMaterial) return s;
+
+        const updatedMateriais = (s.servico_materiais || []).map(sm => {
+          if (sm.material_id === materialId) {
+            const precoUnit = Number(novoPreco) || 0;
+            const qtd = Number(sm.quantidade) || 1;
+            const rend = Number(sm.rendimento) || 1;
+            const subtotal = rend > 0 ? (qtd / rend) * precoUnit : qtd * precoUnit;
+            return {
+              ...sm,
+              preco_unitario: precoUnit,
+              subtotal
+            };
+          }
+          return sm;
+        });
+
+        const novoCustoMateriais = updatedMateriais.reduce((sum, m) => sum + (m.subtotal || 0), 0);
+        const custoTerceiro = Number(s.mao_de_obra) || 0;
+        const precoVenda = Number(s.preco_total) || 0;
+        const novoLucro = precoVenda - (novoCustoMateriais + custoTerceiro);
+        const novaMargem = precoVenda > 0 ? (novoLucro / precoVenda) * 100 : Number(s.margem_lucro) || 0;
+
+        return {
+          ...s,
+          servico_materiais: updatedMateriais,
+          margem_lucro: Math.round(novaMargem * 10) / 10
+        };
+      });
+      try { localStorage.setItem('edifica_cached_servicos', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+  }, []);
+
+  // Unidades distintas para o filtro da tabela de insumos
+  const allUnidades = useMemo(() => {
+    const list = [...new Set(materiais.map(m => m.unidade === 'm' ? 'ML' : (m.unidade || 'un')).filter(Boolean))];
+    return list.sort();
+  }, [materiais]);
 
   // Stats de Orçamentos
   const orcamentoStats = useMemo(() => {
@@ -1767,6 +2094,164 @@ export default function ServicosPage() {
       return matchSearch && matchStatus && matchObra;
     });
   }, [orcamentos, orcamentoSearch, orcamentoStatusFilter, orcamentoObraFilter]);
+
+  // Filtrar Insumos da Tabela de Valores
+  const filteredTabelaMateriais = useMemo(() => {
+    return materiais.filter(m => {
+      const matchSearch = !tabelaSearch ||
+        m.nome?.toLowerCase().includes(tabelaSearch.toLowerCase());
+      const unidFormatted = m.unidade === 'm' ? 'ML' : (m.unidade || 'un');
+      const matchUnidade = !tabelaUnidadeFilter || unidFormatted === tabelaUnidadeFilter;
+      return matchSearch && matchUnidade;
+    });
+  }, [materiais, tabelaSearch, tabelaUnidadeFilter]);
+
+  // Handlers da Tabela de Valores (Edição Rápida Inline de Custo Unitário)
+  const handleStartInlineEdit = (material) => {
+    setInlineEditingId(material.id);
+    setInlineValores({
+      preco_medio: material.preco_medio || 0
+    });
+  };
+
+  const handleCancelInlineEdit = () => {
+    setInlineEditingId(null);
+    setInlineValores({ preco_medio: '' });
+  };
+
+  const handleSaveValoresInline = async (materialId) => {
+    setSavingValoresId(materialId);
+    try {
+      const precoMedio = parseFloat(String(inlineValores.preco_medio).replace(',', '.')) || 0;
+      
+      if (materialId && !materialId.startsWith('m0') && !materialId.startsWith('m-')) {
+        const res = await api.put(`/servicos/materiais/${materialId}`, {
+          preco_medio: precoMedio
+        });
+        if (res.data) {
+          setMateriais(prev => {
+            const updated = prev.map(m => m.id === materialId ? { ...m, ...res.data } : m);
+            try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+        }
+      } else {
+        // Local / mock
+        setMateriais(prev => {
+          const updated = prev.map(m => {
+            if (m.id === materialId) {
+              return { ...m, preco_medio: precoMedio };
+            }
+            return m;
+          });
+          try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+      }
+      cascadeRecalculateServicos(materialId, precoMedio);
+      setToast({ message: 'Custo do insumo atualizado e composições recalculadas!', type: 'success' });
+      setInlineEditingId(null);
+    } catch (err) {
+      setToast({ message: 'Erro ao atualizar valor na tabela.', type: 'error' });
+    } finally {
+      setSavingValoresId(null);
+    }
+  };
+
+  // Handlers do Modal de Insumos (Criar/Editar/Excluir)
+  const handleOpenNewInsumo = () => {
+    setEditingInsumo(null);
+    setInsumoForm({ nome: '', unidade: 'm²', preco_medio: '' });
+    setShowInsumoModal(true);
+  };
+
+  const handleOpenEditInsumo = (material) => {
+    setEditingInsumo(material);
+    setInsumoForm({
+      nome: material.nome || '',
+      unidade: material.unidade || 'm²',
+      preco_medio: material.preco_medio !== undefined ? String(material.preco_medio) : ''
+    });
+    setShowInsumoModal(true);
+  };
+
+  const handleSaveInsumoForm = async (e) => {
+    if (e) e.preventDefault();
+    if (!insumoForm.nome.trim()) return;
+    setSavingInsumo(true);
+    try {
+      const precoMedio = parseFloat(String(insumoForm.preco_medio).replace(',', '.')) || 0;
+      const payload = {
+        nome: insumoForm.nome.trim(),
+        unidade: insumoForm.unidade.trim() || 'un',
+        preco_medio: precoMedio
+      };
+
+      if (editingInsumo?.id && !editingInsumo.id.startsWith('m0') && !editingInsumo.id.startsWith('m-')) {
+        const res = await api.put(`/servicos/materiais/${editingInsumo.id}`, payload);
+        const updatedMat = res.data || { ...editingInsumo, ...payload };
+        setMateriais(prev => {
+          const updated = prev.map(m => m.id === editingInsumo.id ? updatedMat : m);
+          try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+        cascadeRecalculateServicos(editingInsumo.id, precoMedio);
+        setToast({ message: 'Insumo atualizado e composições recalculadas!', type: 'success' });
+      } else if (editingInsumo) {
+        // Mock edit
+        const updatedMat = { ...editingInsumo, ...payload };
+        setMateriais(prev => {
+          const updated = prev.map(m => m.id === editingInsumo.id ? updatedMat : m);
+          try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+        cascadeRecalculateServicos(editingInsumo.id, precoMedio);
+        setToast({ message: 'Insumo atualizado com sucesso!', type: 'success' });
+      } else {
+        // Criar novo insumo
+        try {
+          const res = await api.post('/servicos/materiais', payload);
+          const newMat = res.data || { id: `m-${Date.now()}`, ...payload };
+          setMateriais(prev => {
+            const updated = [newMat, ...prev];
+            try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+        } catch {
+          const newMat = { id: `m-${Date.now()}`, ...payload };
+          setMateriais(prev => {
+            const updated = [newMat, ...prev];
+            try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+            return updated;
+          });
+        }
+        setToast({ message: 'Novo insumo cadastrado na Tabela de Valores!', type: 'success' });
+      }
+      setShowInsumoModal(false);
+      setEditingInsumo(null);
+    } catch (err) {
+      setToast({ message: 'Erro ao salvar insumo.', type: 'error' });
+    } finally {
+      setSavingInsumo(false);
+    }
+  };
+
+  const handleDeleteInsumo = async (material) => {
+    try {
+      if (material.id && !material.id.startsWith('m0') && !material.id.startsWith('m-')) {
+        await api.delete(`/servicos/materiais/${material.id}`);
+      }
+      setMateriais(prev => {
+        const updated = prev.filter(m => m.id !== material.id);
+        try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
+        return updated;
+      });
+      setShowDeleteInsumoConfirm(null);
+      setToast({ message: 'Insumo removido da Tabela de Valores.', type: 'info' });
+    } catch (err) {
+      setToast({ message: 'Erro ao excluir insumo.', type: 'error' });
+    }
+  };
 
   // Handlers de Serviços
   const handleSaveServico = async (data) => {
@@ -1954,16 +2439,31 @@ export default function ServicosPage() {
 
         <button
           onClick={() => setActiveSubTab('servicos')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === 'servicos'
               ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Catálogo de Serviços & Insumos</span>
+          <span>Catálogo de Serviços</span>
           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
             {servicos.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('tabela_valores')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeSubTab === 'tabela_valores'
+              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+          }`}
+        >
+          <Package className="w-4 h-4 text-amber-400" />
+          <span>Tabela de Valores (Insumos)</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
+            {materiais.length}
           </span>
         </button>
       </div>
@@ -2364,6 +2864,275 @@ export default function ServicosPage() {
         </div>
       )}
 
+      {/* ============================================================== */}
+      {/* ABA 3: TABELA DE VALORES (GESTÃO GLOBAL DE INSUMOS / MATERIAIS) */}
+      {/* ============================================================== */}
+      {activeSubTab === 'tabela_valores' && (
+        <div className="space-y-6">
+          {/* Banner Explicativo / Regra de Negócio Notion */}
+          <div className="glass-panel p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">Tabela de Valores — Gestão Global de Insumos</h4>
+                <p className="text-xs text-slate-400">
+                  Custos unitários base dos materiais utilizados nas composições. Alterações refletem automaticamente no custo de materiais de todos os serviços vinculados (orçamentos já aprovados permanecem congelados).
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenNewInsumo}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Novo Insumo</span>
+            </button>
+          </div>
+
+          {/* KPIs da Tabela de Valores */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              {
+                label: 'Insumos Cadastrados',
+                value: `${tabelaValoresStats.total} insumos`,
+                icon: Package,
+                color: 'text-amber-400',
+                bg: 'bg-amber-500/10',
+                border: 'border-amber-500/20'
+              },
+              {
+                label: 'Custo Médio Unitário',
+                value: formatCurrency(tabelaValoresStats.precoMedioInsumo),
+                icon: DollarSign,
+                color: 'text-emerald-400',
+                bg: 'bg-emerald-500/10',
+                border: 'border-emerald-500/20'
+              },
+              {
+                label: 'Insumos em Uso',
+                value: `${tabelaValoresStats.insumosEmUso} insumos`,
+                sub: 'Vinculados a serviços ativos',
+                icon: Wrench,
+                color: 'text-blue-400',
+                bg: 'bg-blue-500/10',
+                border: 'border-blue-500/20'
+              },
+              {
+                label: 'Maior Custo Unitário',
+                value: formatCurrency(tabelaValoresStats.maiorPreco),
+                icon: Tag,
+                color: 'text-purple-400',
+                bg: 'bg-purple-500/10',
+                border: 'border-purple-500/20'
+              }
+            ].map((kpi, idx) => (
+              <div key={idx} className={`glass-card rounded-2xl p-4 border ${kpi.border}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className={`w-8 h-8 rounded-lg ${kpi.bg} flex items-center justify-center`}>
+                    <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">{kpi.label}</p>
+                <p className={`text-lg font-bold ${kpi.color} mt-0.5`}>{kpi.value}</p>
+                {kpi.sub && <p className="text-[10px] text-slate-500 mt-1 font-medium">{kpi.sub}</p>}
+              </div>
+            ))}
+          </div>
+
+          {/* Barra de Filtros da Tabela */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={tabelaSearch}
+                onChange={(e) => setTabelaSearch(e.target.value)}
+                placeholder="Buscar insumo por nome..."
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-800/60 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+            </div>
+
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={tabelaUnidadeFilter}
+                onChange={(e) => setTabelaUnidadeFilter(e.target.value)}
+                className="pl-10 pr-8 py-2.5 bg-slate-800/60 border border-slate-700/60 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer appearance-none min-w-[180px]"
+              >
+                <option value="">Todas as Unidades</option>
+                {allUnidades.map(unid => (
+                  <option key={unid} value={unid}>{unid}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabela de Insumos / Materiais */}
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                <p className="text-sm text-slate-400">Carregando tabela de insumos...</p>
+              </div>
+            </div>
+          ) : filteredTabelaMateriais.length > 0 ? (
+            <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 uppercase tracking-wider font-semibold text-[11px]">
+                      <th className="py-3 px-4">Insumo / Material</th>
+                      <th className="py-3 px-3 text-center">Unidade</th>
+                      <th className="py-3 px-4 text-right">Custo Unitário Global (R$)</th>
+                      <th className="py-3 px-4 text-center">Serviços Vinculados</th>
+                      <th className="py-3 px-4 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {filteredTabelaMateriais.map((material) => {
+                      const isEditing = inlineEditingId === material.id;
+                      const isSaving = savingValoresId === material.id;
+                      const unidSigla = material.unidade === 'm' ? 'ML' : (material.unidade || 'un');
+                      const usageCount = getMaterialUsageCount(material.id);
+
+                      return (
+                        <tr key={material.id} className={`hover:bg-slate-800/30 transition-colors ${isEditing ? 'bg-amber-500/5' : ''}`}>
+                          {/* Insumo / Descrição */}
+                          <td className="py-3.5 px-4 max-w-xs">
+                            <span className="font-bold text-white text-sm block">{material.nome}</span>
+                          </td>
+
+                          {/* Unidade */}
+                          <td className="py-3.5 px-3 text-center">
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-emerald-400 border border-slate-700">
+                              {unidSigla}
+                            </span>
+                          </td>
+
+                          {/* Preço Médio Global */}
+                          <td className="py-3.5 px-4 text-right">
+                            {isEditing ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className="text-xs text-slate-500 font-medium">R$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={inlineValores.preco_medio}
+                                  onChange={(e) => setInlineValores({ ...inlineValores, preco_medio: e.target.value })}
+                                  className="w-28 bg-emerald-950/40 border border-emerald-500 rounded-lg px-2 py-1 text-xs text-emerald-300 text-right focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold"
+                                  placeholder="0.00"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveValoresInline(material.id);
+                                    if (e.key === 'Escape') handleCancelInlineEdit();
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <span
+                                onClick={() => handleStartInlineEdit(material)}
+                                className="text-sm font-bold text-emerald-400 cursor-pointer hover:underline transition-colors inline-flex items-center gap-1"
+                                title="Clique para editar rapidamente"
+                              >
+                                {formatCurrency(material.preco_medio)}
+                                <Edit3 className="w-3 h-3 opacity-40 hover:opacity-100" />
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Serviços Vinculados */}
+                          <td className="py-3.5 px-4 text-center">
+                            {usageCount > 0 ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                {usageCount} {usageCount === 1 ? 'serviço' : 'serviços'}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-500">Nenhum</span>
+                            )}
+                          </td>
+
+                          {/* Ações */}
+                          <td className="py-3.5 px-4 text-center">
+                            {isEditing ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleSaveValoresInline(material.id)}
+                                  disabled={isSaving}
+                                  className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40 transition-all cursor-pointer"
+                                  title="Salvar Custo Unitário"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={handleCancelInlineEdit}
+                                  disabled={isSaving}
+                                  className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                                  title="Cancelar"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => handleStartInlineEdit(material)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                                  title="Edição Rápida de Custo"
+                                >
+                                  <DollarSign className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleOpenEditInsumo(material)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer"
+                                  title="Editar Insumo"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setShowDeleteInsumoConfirm(material)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                                  title="Excluir Insumo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center glass-card rounded-2xl border border-slate-800">
+              <Package className="w-12 h-12 text-slate-600 mb-3" />
+              <h3 className="text-lg font-semibold text-slate-400 mb-1">
+                {tabelaSearch || tabelaUnidadeFilter ? 'Nenhum insumo encontrado' : 'Tabela de valores vazia'}
+              </h3>
+              <p className="text-sm text-slate-500 mb-4">
+                {tabelaSearch || tabelaUnidadeFilter
+                  ? 'Tente ajustar os filtros de busca.'
+                  : 'Nenhum insumo cadastrado na tabela de valores.'}
+              </p>
+              {!tabelaSearch && !tabelaUnidadeFilter && (
+                <button
+                  onClick={handleOpenNewInsumo}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Primeiro Insumo</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modal de Criar/Editar Serviço */}
       <Modal
         isOpen={showForm}
@@ -2471,6 +3240,118 @@ export default function ServicosPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal Criar/Editar Insumo (Tabela de Valores) */}
+      <Modal
+        isOpen={showInsumoModal}
+        onClose={() => { setShowInsumoModal(false); setEditingInsumo(null); }}
+        title={editingInsumo ? 'Editar Insumo na Tabela de Valores' : 'Novo Insumo no Catálogo Global'}
+        size="md"
+      >
+        <form onSubmit={handleSaveInsumoForm} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+              Nome do Insumo / Material <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={insumoForm.nome}
+              onChange={(e) => setInsumoForm({ ...insumoForm, nome: e.target.value })}
+              placeholder="Ex: Placa Drywall ST 12.5mm, Cimento CP-II..."
+              className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                Unidade de Medida <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={insumoForm.unidade}
+                onChange={(e) => setInsumoForm({ ...insumoForm, unidade: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer"
+              >
+                {UNIDADES_INSUMO.map(u => (
+                  <option key={u.value} value={u.value}>{u.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                Custo Unitário Global (R$) <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={insumoForm.preco_medio}
+                onChange={(e) => setInsumoForm({ ...insumoForm, preco_medio: e.target.value })}
+                placeholder="0.00"
+                className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white text-right focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              />
+            </div>
+          </div>
+
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300/90 leading-relaxed">
+            <span className="font-bold">Regra de Negócio Notion:</span> O custo unitário cadastrado aqui é a referência global do insumo. Ao atualizar, as composições de serviços que utilizam este insumo terão o custo de material recalculado automaticamente.
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => { setShowInsumoModal(false); setEditingInsumo(null); }}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={savingInsumo || !insumoForm.nome.trim()}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>{savingInsumo ? 'Salvando...' : editingInsumo ? 'Salvar Alterações' : 'Cadastrar Insumo'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Confirmação Exclusão de Insumo */}
+      {showDeleteInsumoConfirm && (
+        <Modal
+          isOpen={!!showDeleteInsumoConfirm}
+          onClose={() => setShowDeleteInsumoConfirm(null)}
+          title="Excluir Insumo da Tabela de Valores"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300">
+              <AlertCircle className="w-6 h-6 shrink-0" />
+              <p className="text-xs">
+                Tem certeza que deseja excluir o insumo <strong className="text-white">{showDeleteInsumoConfirm.nome}</strong> da Tabela de Valores?
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteInsumoConfirm(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDeleteInsumo(showDeleteInsumoConfirm)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
+              >
+                Excluir Insumo
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Toast Notification */}
       {toast && (

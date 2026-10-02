@@ -379,6 +379,8 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
         {filteredObras.map((obra) => {
           const isAtiva = obra.status === 'ativa';
           const isArquivada = Boolean(obra.arquivada);
+          const valorAprovadoCalc = obra.orcamentos?.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
+          const valorPendenteCalc = obra.orcamentos?.filter(o => o.status === 'rascunho' || o.status === 'enviado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
 
           return (
             <div 
@@ -477,12 +479,12 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
                 <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-2 mb-4">
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-400">Orçamento Aprovado:</span>
-                    <span className="font-bold text-white">{formatMoney(obra.valor_aprovado)}</span>
+                    <span className="font-bold text-white">{formatMoney(valorAprovadoCalc)}</span>
                   </div>
-                  {obra.valor_pendente_aprovacao > 0 && (
+                  {valorPendenteCalc > 0 && (
                     <div className="flex justify-between text-xs mt-1">
                       <span className="text-amber-400/80">Pendente de Aprovação:</span>
-                      <span className="font-bold text-amber-400">{formatMoney(obra.valor_pendente_aprovacao)}</span>
+                      <span className="font-bold text-amber-400">{formatMoney(valorPendenteCalc)}</span>
                     </div>
                   )}
                   {(obra.orcamento_materiais > 0 || obra.orcamento_empreiteiros > 0 || obra.orcamento_caixa > 0) && (

@@ -86,6 +86,8 @@ export function printPropostaComercial(data) {
     dataEmissao = new Date().toLocaleDateString('pt-BR'),
     itens = [],
     valorTotal = 0,
+    margemBdiPercentual = 15.0,
+    impostosPercentual = 20.5,
     validadeDias = 15,
     prazoDias = 10,
     prazoGarantia = '12 (doze) meses',
@@ -277,7 +279,10 @@ export function printPropostaComercial(data) {
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
               ${itens.map(i => {
-                const sub = i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100);
+                const bdi = margemBdiPercentual || 0;
+                const imp = impostosPercentual || 0;
+                const fatorAcrescimo = 1 + ((bdi + imp) / 100);
+                const sub = i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
                 return `
                   <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 9.8pt; border-bottom: 1px dashed #e2e8f0;">
                     <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''}</span>
@@ -401,6 +406,8 @@ export function PropostaComercialPreviewModal({
     dataEmissao = new Date().toLocaleDateString('pt-BR'),
     itens = [],
     valorTotal = 0,
+    margemBdiPercentual = 15.0,
+    impostosPercentual = 20.5,
     validadeDias = 15,
     prazoDias = 10,
     prazoGarantia = '12 (doze) meses',
@@ -575,7 +582,10 @@ export function PropostaComercialPreviewModal({
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-5 space-y-1.5 text-xs">
                 {itens.map((it, idx) => {
-                  const sub = it.preco_unitario * it.quantidade * (1 - (it.desconto_percentual || 0) / 100);
+                  const bdi = margemBdiPercentual || 0;
+                  const imp = impostosPercentual || 0;
+                  const fatorAcrescimo = 1 + ((bdi + imp) / 100);
+                  const sub = it.preco_unitario * it.quantidade * (1 - (it.desconto_percentual || 0) / 100) * fatorAcrescimo;
                   return (
                     <div key={idx} className="flex justify-between py-1 border-b border-slate-200/60 last:border-0">
                       <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''}</span>

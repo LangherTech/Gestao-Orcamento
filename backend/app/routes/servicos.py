@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from ..models.servicos import (
-    ServicoCreate, ServicoUpdate, ServicoResponse,
+    ServicoCreate, ServicoUpdate, ServicoResponse, ServicoValoresUpdate,
     MaterialCreate, MaterialUpdate, MaterialResponse,
     ServicoMaterialInput,
     OrcamentoGerarRequest,
@@ -222,15 +222,27 @@ async def gerar_orcamento(req: OrcamentoGerarRequest, user: dict = Depends(get_c
 
     for item in req.itens:
         servico_data = None
-        if supabase:
-            res = supabase.table("servicos").select("*").eq("id", str(item.servico_id)).execute()
-            if res.data:
-                servico_data = res.data[0]
+        if item.tipo == "servico" and item.servico_id:
+            if supabase:
+                res = supabase.table("servicos").select("*").eq("id", str(item.servico_id)).execute()
+                if res.data:
+                    servico_data = res.data[0]
+            if not servico_data:
+                servico_data = {"id": str(item.servico_id), "nome": "Serviço", "preco_total": 0}
+            preco_unit = servico_data.get("preco_total", 0)
+        elif item.tipo == "insumo" and item.material_id:
+            if supabase:
+                res = supabase.table("materiais").select("*").eq("id", str(item.material_id)).execute()
+                if res.data:
+                    servico_data = res.data[0]
+            if not servico_data:
+                servico_data = {"id": str(item.material_id), "nome": "Insumo", "preco_medio": 0}
+            preco_unit = servico_data.get("preco_medio", 0)
+            servico_data["nome"] = servico_data.get("nome", "")
+        else:
+            preco_unit = 0
+            servico_data = {"nome": item.descricao or "Item"}
 
-        if not servico_data:
-            servico_data = {"id": str(item.servico_id), "nome": "Serviço", "preco_total": 0}
-
-        preco_unit = servico_data.get("preco_total", 0)
         subtotal_item = preco_unit * item.quantidade
         desconto_valor = subtotal_item * (item.desconto_percentual / 100)
         total_item = subtotal_item - desconto_valor
@@ -247,12 +259,17 @@ async def gerar_orcamento(req: OrcamentoGerarRequest, user: dict = Depends(get_c
             "total": round(total_item, 2)
         })
 
+    total_liquido = subtotal_geral
+    fator_acrescimo = 1 + ((req.margem_bdi_percentual + req.impostos_percentual) / 100)
+    valor_total_final = round(total_liquido * fator_acrescimo, 2)
+
     return {
         "obra_id": str(req.obra_id) if req.obra_id else None,
         "cliente_nome": req.cliente_nome,
         "cliente_contato": req.cliente_contato,
         "itens": itens_orcamento,
         "subtotal": round(subtotal_geral, 2),
+        "valor_total": valor_total_final,
         "observacoes": req.observacoes,
         "validade_dias": req.validade_dias,
         "gerado_por": user.get("email", "sistema")
@@ -330,18 +347,30 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         preco_unit = item.preco_unitario or 0.0
         descricao = item.descricao or "Item de Serviço"
         
-        # Se preco_unitario for 0 e tiver servico_id, buscar preço do serviço
-        if (preco_unit == 0.0 or not item.descricao) and item.servico_id:
-            if supabase:
-                try:
-                    s_res = supabase.table("servicos").select("preco_total, nome").eq("id", str(item.servico_id)).execute()
-                    if s_res.data:
-                        if preco_unit == 0.0:
-                            preco_unit = s_res.data[0].get("preco_total", 0.0)
-                        if not item.descricao:
-                            descricao = s_res.data[0].get("nome", "Serviço")
-                except Exception:
-                    pass
+        # Se preco_unitario for 0 e tiver servico_id/material_id, buscar preço
+        if (preco_unit == 0.0 or not item.descricao):
+            if item.tipo == "servico" and item.servico_id:
+                if supabase:
+                    try:
+                        s_res = supabase.table("servicos").select("preco_total, nome").eq("id", str(item.servico_id)).execute()
+                        if s_res.data:
+                            if preco_unit == 0.0:
+                                preco_unit = s_res.data[0].get("preco_total", 0.0)
+                            if not item.descricao:
+                                descricao = s_res.data[0].get("nome", "Serviço")
+                    except Exception:
+                        pass
+            elif item.tipo == "insumo" and item.material_id:
+                if supabase:
+                    try:
+                        m_res = supabase.table("materiais").select("preco_medio, nome").eq("id", str(item.material_id)).execute()
+                        if m_res.data:
+                            if preco_unit == 0.0:
+                                preco_unit = m_res.data[0].get("preco_medio", 0.0)
+                            if not item.descricao:
+                                descricao = m_res.data[0].get("nome", "Insumo")
+                    except Exception:
+                        pass
 
         sub_bruto = preco_unit * item.quantidade
         desc_val = sub_bruto * (item.desconto_percentual / 100)
@@ -355,6 +384,7 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             "orcamento_id": orc_id,
             "servico_id": str(item.servico_id) if item.servico_id else None,
             "material_id": str(item.material_id) if item.material_id else None,
+            "tipo": item.tipo,
             "descricao": descricao,
             "quantidade": item.quantidade,
             "preco_unitario": preco_unit,
@@ -362,7 +392,9 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             "subtotal": round(sub_liquido, 2)
         })
 
-    valor_total = round(subtotal_geral - desconto_total, 2)
+    total_liquido = subtotal_geral - desconto_total
+    fator_acrescimo = 1 + ((orcamento.margem_bdi_percentual + orcamento.impostos_percentual) / 100)
+    valor_total = round(total_liquido * fator_acrescimo, 2)
 
     orcamento_dict = {
         "id": orc_id,
@@ -446,6 +478,7 @@ async def update_orcamento(
                 "orcamento_id": orcamento_id,
                 "servico_id": str(item.servico_id) if item.servico_id else None,
                 "material_id": str(item.material_id) if hasattr(item, "material_id") and item.material_id else None,
+                "tipo": item.tipo,
                 "descricao": descricao,
                 "quantidade": item.quantidade,
                 "preco_unitario": preco_unit,
@@ -453,7 +486,11 @@ async def update_orcamento(
                 "subtotal": round(sub_liquido, 2)
             })
 
-    valor_total = round(subtotal_geral - desconto_total, 2)
+    total_liquido = subtotal_geral - desconto_total
+    bdi = orcamento.margem_bdi_percentual if orcamento.margem_bdi_percentual is not None else 0.0
+    imp = orcamento.impostos_percentual if orcamento.impostos_percentual is not None else 0.0
+    fator_acrescimo = 1 + ((bdi + imp) / 100)
+    valor_total = round(total_liquido * fator_acrescimo, 2)
 
     update_dict = {
         "updated_at": now_iso
@@ -609,7 +646,7 @@ async def list_servicos(
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_servico(servico: ServicoCreate, user: dict = Depends(get_current_user)):
-    """Cadastra um novo serviço com materiais vinculados."""
+    """Cadastra um novo serviço com materiais vinculados e cálculo bidirecional de margem."""
     supabase = get_supabase_client()
     data = servico.model_dump()
     materiais = data.pop("materiais", [])
@@ -618,6 +655,13 @@ async def create_servico(servico: ServicoCreate, user: dict = Depends(get_curren
     if data.get("obra_id"):
         data["obra_id"] = str(data["obra_id"])
     data["created_by"] = None if user.get("is_mock") else user.get("id")
+
+    # Recalcula margem sobre venda se preco_total > 0 e margem_lucro não calculada
+    custo_mat = sum(float(m.get("quantidade", 1)) * float(m.get("preco_unitario", 0)) for m in materiais)
+    custo_tot = custo_mat + float(data.get("mao_de_obra", 0))
+    preco_venda = float(data.get("preco_total", 0))
+    if preco_venda > 0 and (data.get("margem_lucro") is None or data.get("margem_lucro") == 0.0):
+        data["margem_lucro"] = round(((preco_venda - custo_tot) / preco_venda) * 100, 2)
 
     if supabase:
         try:
@@ -661,17 +705,108 @@ async def get_servico(servico_id: UUID, user: dict = Depends(get_current_user)):
 
 @router.put("/{servico_id}", response_model=dict)
 async def update_servico(servico_id: UUID, servico: ServicoUpdate, user: dict = Depends(get_current_user)):
-    """Atualiza os dados básicos de um serviço."""
+    """Atualiza os dados de um serviço e sua composição de insumos."""
     supabase = get_supabase_client()
     update_data = servico.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+    
+    materiais = update_data.pop("materiais", None)
+    if "obra_id" in update_data and update_data["obra_id"]:
+        update_data["obra_id"] = str(update_data["obra_id"])
+        
     update_data["updated_at"] = datetime.utcnow().isoformat()
+
     if supabase:
+        # Se materiais fornecidos, atualiza a relação de insumos
+        if materiais is not None:
+            try:
+                supabase.table("servico_materiais").delete().eq("servico_id", str(servico_id)).execute()
+                for m in materiais:
+                    m_data = {
+                        "servico_id": str(servico_id),
+                        "material_id": str(m["material_id"]),
+                        "quantidade": m["quantidade"],
+                        "rendimento": m["rendimento"],
+                        "preco_unitario": m["preco_unitario"]
+                    }
+                    supabase.table("servico_materiais").insert(m_data).execute()
+            except Exception as e:
+                logger.warning(f"Erro ao sincronizar materiais do serviço {servico_id}: {e}")
+
+        # Se margem não foi especificada, calcula automaticamente
+        if "margem_lucro" not in update_data:
+            try:
+                curr_sm = supabase.table("servico_materiais").select("quantidade, preco_unitario").eq("servico_id", str(servico_id)).execute()
+                custo_mat = sum(float(it.get("quantidade", 0)) * float(it.get("preco_unitario", 0)) for it in (curr_sm.data or []))
+                
+                # Preço e Mão de Obra atuais ou novos
+                curr_srv = supabase.table("servicos").select("preco_total, mao_de_obra").eq("id", str(servico_id)).execute()
+                base_srv = curr_srv.data[0] if curr_srv.data else {}
+                
+                pv = float(update_data.get("preco_total", base_srv.get("preco_total", 0)))
+                mo = float(update_data.get("mao_de_obra", base_srv.get("mao_de_obra", 0)))
+                ct = custo_mat + mo
+                if pv > 0:
+                    update_data["margem_lucro"] = round(((pv - ct) / pv) * 100, 2)
+            except Exception as e:
+                logger.warning(f"Erro no cálculo de margem ao atualizar serviço: {e}")
+
+        if update_data:
+            res = supabase.table("servicos").update(update_data).eq("id", str(servico_id)).execute()
+            if not res.data:
+                raise HTTPException(status_code=404, detail="Serviço não encontrado.")
+        
+        full = supabase.table("servicos").select(
+            "*, servico_materiais(*, materiais(*))"
+        ).eq("id", str(servico_id)).execute()
+        return full.data[0] if full.data else {"id": str(servico_id), **update_data}
+
+    return {"id": str(servico_id), **update_data}
+
+
+@router.patch("/{servico_id}/valores", response_model=dict)
+async def update_servico_valores(
+    servico_id: UUID,
+    valores: ServicoValoresUpdate,
+    user: dict = Depends(get_current_user)
+):
+    """Atualização rápida de preço de venda (preco_total) e/ou custo de terceiro (mao_de_obra) para a Tabela de Valores."""
+    supabase = get_supabase_client()
+    update_data = valores.model_dump(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nenhum valor para atualizar.")
+    
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    
+    if supabase:
+        current = supabase.table("servicos").select("*, servico_materiais(*)").eq("id", str(servico_id)).execute()
+        if not current.data:
+            raise HTTPException(status_code=404, detail="Serviço não encontrado.")
+        
+        curr_servico = current.data[0]
+        custo_materiais = sum(
+            float(m.get("quantidade", 0)) * float(m.get("preco_unitario", 0)) 
+            for m in curr_servico.get("servico_materiais", [])
+        )
+        
+        preco_venda = float(update_data.get("preco_total", curr_servico.get("preco_total", 0)))
+        custo_terceiro = float(update_data.get("mao_de_obra", curr_servico.get("mao_de_obra", 0)))
+        custo_total = custo_materiais + custo_terceiro
+        
+        if "margem_lucro" not in update_data:
+            if preco_venda > 0:
+                update_data["margem_lucro"] = round(((preco_venda - custo_total) / preco_venda) * 100, 2)
+            else:
+                update_data["margem_lucro"] = 0.0
+                
         res = supabase.table("servicos").update(update_data).eq("id", str(servico_id)).execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Serviço não encontrado.")
-        return res.data[0]
+            raise HTTPException(status_code=404, detail="Erro ao atualizar valores do serviço.")
+            
+        full = supabase.table("servicos").select("*, servico_materiais(*, materiais(*))").eq("id", str(servico_id)).execute()
+        return full.data[0] if full.data else res.data[0]
+        
     return {"id": str(servico_id), **update_data}
 
 
