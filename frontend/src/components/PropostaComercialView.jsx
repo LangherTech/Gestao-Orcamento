@@ -6,7 +6,7 @@ import { Download, Printer, ArrowLeft, Eye, CheckCircle2, ChevronLeft, ChevronRi
 // Quando fornecer o arquivo oficial da logo (PNG/SVG/JPG),
 // basta inserir o caminho ou URL na variável abaixo:
 // ========================================================
-export const COMPANY_LOGO_URL = null; // Ex: '/logo-edifica.png' ou URL importada
+export const COMPANY_LOGO_URL = 'https://res.cloudinary.com/doaewgeqp/image/upload/v1773234218/logo_edifica_fw3p0t.png'; // Ex: '/logo-edifica.png' ou URL importada
 
 export function EdificaOfficialLogo({ className = "h-12", isPrint = false }) {
   if (COMPANY_LOGO_URL) {
@@ -284,13 +284,14 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
                 const bdi = margemBdiPercentual || 0;
                 const imp = impostosPercentual || 0;
                 const fatorAcrescimo = 1 + ((bdi + imp) / 100);
-                const sub = i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
-                const unitFinal = i.preco_unitario * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                const isCliente = i.fornecido_por === 'Cliente';
+                const sub = isCliente ? 0 : i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                const unitFinal = isCliente ? 0 : i.preco_unitario * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
                 
                 let html = `
                   <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 9.8pt; border-bottom: 1px dashed #e2e8f0;">
-                    <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''}</span>
-                    <span style="font-weight: 600;">${formatCurrency(sub)}</span>
+                    <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''} ${isCliente ? '<span style="color:#d97706; font-size:8pt; font-weight:bold; margin-left:4px;">(Fornecido pelo Cliente)</span>' : ''}</span>
+                    <span style="font-weight: 600;">${isCliente ? '-' : formatCurrency(sub)}</span>
                   </div>
                 `;
 

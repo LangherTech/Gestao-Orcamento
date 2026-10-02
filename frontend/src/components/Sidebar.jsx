@@ -41,16 +41,12 @@ export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) 
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 glass-panel border-r border-slate-800 flex flex-col justify-between transform transition-transform duration-300 md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full overflow-hidden">
           {/* Brand Header */}
-          <div className="h-16 flex items-center px-6 border-b border-slate-800/80 bg-slate-950/40 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <Building2 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="font-bold text-white text-base leading-tight tracking-tight">Edifica</h1>
-                <span className="text-[10px] text-emerald-400 font-medium tracking-wider uppercase">Soluções em Obras</span>
-              </div>
-            </div>
+          <div className="h-16 flex items-center justify-center px-4 border-b border-slate-800/80 bg-slate-950/40 shrink-0">
+            <img
+              src="https://res.cloudinary.com/doaewgeqp/image/upload/v1773234514/Design_sem_nome_2_rhfw6s.png"
+              alt="Edifica"
+              className="h-9 w-auto object-contain"
+            />
           </div>
 
           {/* Navigation Items */}

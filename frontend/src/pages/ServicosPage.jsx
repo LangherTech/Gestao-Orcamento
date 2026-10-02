@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { PropostaComercialPreviewModal, printPropostaComercial } from '../components/PropostaComercialView';
+import AssistenteDrywallModal from '../components/AssistenteDrywallModal';
 
 
 // ========================================
@@ -361,6 +362,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   const [showAddMaterial, setShowAddMaterial] = useState(false);
   const [materialSearch, setMaterialSearch] = useState('');
   const [showNewMaterial, setShowNewMaterial] = useState(false);
+  const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'ML', preco_medio: '' });
   const [savingMaterial, setSavingMaterial] = useState(false);
   const [localMateriais, setLocalMateriais] = useState(materiais);
@@ -433,6 +435,23 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
       preco_total: novoPreco,
       margem_lucro: novaMargem
     }));
+  };
+
+  
+  const handleAddAssistenteInsumos = (insumosList) => {
+    // Generate unique negative IDs for items that aren't exactly in catalog to distinguish
+    const novosItens = insumosList.map((ins, idx) => ({
+      servico_id: null,
+      material_id: -(Date.now() + idx), // ID temporário
+      tipo: 'insumo',
+      servico_nome: ins.papel,
+      preco_unitario: Number(ins.precoBase) || 0,
+      quantidade: ins.qtd,
+      desconto_percentual: 0,
+      fornecido_por: ins.fornecidoPor
+    }));
+    setItens(prev => [...prev, ...novosItens]);
+    setShowAssistenteDrywall(false);
   };
 
   const handleAddMaterial = (material) => {
@@ -941,6 +960,7 @@ function OrcamentoModal({
 
   // Novo Insumo
   const [showNewMaterial, setShowNewMaterial] = useState(false);
+  const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'ML', preco_medio: '' });
   const [savingMaterial, setSavingMaterial] = useState(false);
 
@@ -1032,6 +1052,23 @@ function OrcamentoModal({
     }]);
   };
 
+  
+  const handleAddAssistenteInsumos = (insumosList) => {
+    // Generate unique negative IDs for items that aren't exactly in catalog to distinguish
+    const novosItens = insumosList.map((ins, idx) => ({
+      servico_id: null,
+      material_id: -(Date.now() + idx), // ID temporário
+      tipo: 'insumo',
+      servico_nome: ins.papel,
+      preco_unitario: Number(ins.precoBase) || 0,
+      quantidade: ins.qtd,
+      desconto_percentual: 0,
+      fornecido_por: ins.fornecidoPor
+    }));
+    setItens(prev => [...prev, ...novosItens]);
+    setShowAssistenteDrywall(false);
+  };
+
   const handleAddMaterial = (material) => {
     if (itens.find(i => i.material_id === material.id)) return;
     setItens(prev => [...prev, {
@@ -1102,8 +1139,8 @@ function OrcamentoModal({
     }
   };
 
-  const subtotalBruto = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade), 0);
-  const totalDescontos = itens.reduce((sum, item) => sum + (item.preco_unitario * item.quantidade * (item.desconto_percentual / 100)), 0);
+  const subtotalBruto = itens.reduce((sum, item) => sum + (item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade)), 0);
+  const totalDescontos = itens.reduce((sum, item) => sum + (item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade * (item.desconto_percentual / 100))), 0);
   const totalLiquido = subtotalBruto - totalDescontos;
   const fatorAcrescimo = 1 + ((margemBdiPercentual + impostosPercentual) / 100);
   const valorTotalFinal = totalLiquido * fatorAcrescimo;
@@ -1695,7 +1732,14 @@ function OrcamentoModal({
               })()}
             </div>
             
-            <div className="mt-2 text-right">
+            <div className="mt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAssistenteDrywall(true)}
+                className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                🪄 Assistentes de Cálculo
+              </button>
               <button
                 type="button"
                 onClick={() => setShowNewMaterial(!showNewMaterial)}
@@ -1766,7 +1810,12 @@ function OrcamentoModal({
                 {itens.map((item, idx) => (
                   <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-white truncate block">{item.servico_nome}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white truncate block">{item.servico_nome}</span>
+                        {item.fornecido_por === 'Cliente' && (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold uppercase">Fornecido p/ Cliente</span>
+                        )}
+                      </div>
                       <span className="text-[11px] text-slate-400">Unitário: {formatCurrency(item.preco_unitario)}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
@@ -1860,6 +1909,13 @@ function OrcamentoModal({
             </div>
           </div>
         </div>
+      )}
+
+      {showAssistenteDrywall && (
+        <AssistenteDrywallModal 
+          onClose={() => setShowAssistenteDrywall(false)}
+          onAddInsumos={handleAddAssistenteInsumos}
+        />
       )}
 
       {step === 2 && (
