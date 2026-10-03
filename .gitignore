@@ -43,3 +43,17 @@ wheels/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Scripts temporários de patch/debug
+patch_*.py
+normalize.py
+query.py
+test_save.py
+test_models.py
+scratch/
+backend/check_db.py
+backend/patch_routes.py
+backend/test_fastapi.py
+backend/test_logic.py
+backend/test_models.py
+frontend/patch_modal.py
