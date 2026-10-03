@@ -33,7 +33,7 @@ class MaterialResponse(MaterialBase):
 # ========================================
 class ServicoMaterialInput(BaseModel):
     material_id: UUID
-    quantidade: float = Field(1.0, gt=0)
+    quantidade: float = Field(1.0, ge=0)
     rendimento: float = Field(1.0, gt=0)
     preco_unitario: float = Field(0.0, ge=0)
 
@@ -103,9 +103,14 @@ class OrcamentoItemInput(BaseModel):
     material_id: Optional[UUID] = None
     tipo: str = Field("servico", description="servico ou insumo")
     descricao: Optional[str] = None
-    quantidade: float = Field(1.0, gt=0)
+    quantidade: float = Field(1.0, ge=0)
     preco_unitario: Optional[float] = Field(0.0, ge=0)
-    desconto_percentual: float = Field(0.0, ge=0, le=100)
+    fornecido_por: str = "Edifica"
+    unidade: Optional[str] = None
+    preco_catalogo: Optional[float] = None
+    embalagem_id: Optional[UUID] = None
+    origem_assistente: Optional[bool] = False
+    assistente_execucao_id: Optional[str] = None
 
 class OrcamentoItemResponse(BaseModel):
     id: Optional[str] = None
@@ -116,7 +121,12 @@ class OrcamentoItemResponse(BaseModel):
     descricao: str
     quantidade: float
     preco_unitario: float
-    desconto_percentual: float
+    fornecido_por: str = "Edifica"
+    unidade: Optional[str] = None
+    preco_catalogo: Optional[float] = None
+    embalagem_id: Optional[str] = None
+    origem_assistente: Optional[bool] = False
+    assistente_execucao_id: Optional[str] = None
     subtotal: float
 
 class OrcamentoCreate(BaseModel):
@@ -172,7 +182,6 @@ class OrcamentoResponse(BaseModel):
     prazo_garantia: Optional[str] = None
     objetivo: Optional[str] = None
     subtotal: float
-    desconto_total: float
     valor_total: float
     validade_dias: int
     status: str
@@ -180,6 +189,7 @@ class OrcamentoResponse(BaseModel):
     notas: Optional[str] = None
     impostos_percentual: float = 0.0
     margem_bdi_percentual: float = 0.0
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     itens: List[OrcamentoItemResponse] = []
@@ -198,3 +208,36 @@ class OrcamentoGerarRequest(BaseModel):
     margem_bdi_percentual: float = Field(0.0, ge=0)
     validade_dias: int = Field(30, ge=1)
 
+# ========================================
+# Assistente de Cálculo
+# ========================================
+
+class AssistenteDrywallInput(BaseModel):
+    modo: str = Field("rapido", description="rapido ou exato")
+    area_m2: float
+    comprimento_m: float
+    pe_direito_m: float = 2.70
+    n_vaos: int = 0
+    n_quinas_t: int = 0
+    modulacao_mm: int = 600
+    formato_placa: str
+    tipo_placa: str = Field("ST", description="ST, RU, ou RF")
+    perda_percentual: float = 10.0
+
+class AssistenteDrywallItemResponse(BaseModel):
+    papel: str
+    descricao: str
+    material_id: Optional[UUID] = None
+    unidade: Optional[str] = None
+    qtd_liquida_uso: float
+    unidade_uso: str
+    qtd_compra: float
+    preco_unitario: Optional[float] = None
+    fornecido_por: str = "Edifica"
+    sem_vinculo: bool = False
+    embalagens_recomendadas: List[dict] = []
+    embalagem_id: Optional[UUID] = None
+    sobra_unidades: Optional[float] = 0.0
+
+class AssistenteInsumoUpdate(BaseModel):
+    material_id: UUID

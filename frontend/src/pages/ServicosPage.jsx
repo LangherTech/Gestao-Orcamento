@@ -4,7 +4,7 @@ import {
   Search, Filter, ChevronDown, ChevronUp, Trash2, Edit3,
   Package, DollarSign, Percent, Wrench, Eye, Save, ArrowLeft,
   Calculator, AlertCircle, CheckCircle, Copy, Download,
-  Building2, Check, Clock, Send, XCircle, Phone, Mail
+  Building2, Check, Clock, Send, XCircle, Phone, Mail, RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
 import { PropostaComercialPreviewModal, printPropostaComercial } from '../components/PropostaComercialView';
@@ -28,33 +28,23 @@ const CATEGORIAS_PADRAO = [
 ];
 
 const UNIDADES_INSUMO = [
-  { value: 'm²', label: 'M² (Metro Quadrado)' },
-  { value: 'm', label: 'ML (Metro Linear)' },
-  { value: 'm³', label: 'M³ (Metro Cúbico)' },
-  { value: 'un', label: 'Unidade (un)' },
-  { value: 'saco', label: 'Saco' },
-  { value: 'barra', label: 'Barra' },
-  { value: 'lata', label: 'Lata' },
-  { value: 'rolo', label: 'Rolo' },
-  { value: 'kg', label: 'Kg (Quilograma)' },
-  { value: 'cx', label: 'Caixa (cx)' },
-  { value: 'par', label: 'Par' }
+  'Ml', 'M²', 'M³', 'Un'
 ];
 
 const FALLBACK_MATERIAIS = [
-  { id: 'm001', nome: 'Placa Drywall Standard ST 12.5mm', unidade: 'm²', preco_medio: 22.50 },
-  { id: 'm002', nome: 'Perfil Guia 70mm', unidade: 'barra', preco_medio: 18.90 },
-  { id: 'm003', nome: 'Perfil Montante 70mm', unidade: 'barra', preco_medio: 17.50 },
-  { id: 'm004', nome: 'Massa de Acabamento para Gesso', unidade: 'saco', preco_medio: 42.00 },
-  { id: 'm005', nome: 'Tinta Acrílica Premium Suvinil 18L', unidade: 'lata', preco_medio: 320.00 },
-  { id: 'm006', nome: 'Fundo Preparador 18L', unidade: 'lata', preco_medio: 95.00 },
-  { id: 'm007', nome: 'Lixa para Parede 100', unidade: 'un', preco_medio: 2.50 },
-  { id: 'm008', nome: 'Fita Telada Adesiva 50mm', unidade: 'rolo', preco_medio: 14.00 },
-  { id: 'm009', nome: 'Arame Galvanizado 18', unidade: 'kg', preco_medio: 18.00 },
-  { id: 'm010', nome: 'Gesso Cola 1kg', unidade: 'saco', preco_medio: 8.50 },
-  { id: 'm011', nome: 'Cimento Portland CP-II (50kg)', unidade: 'saco', preco_medio: 34.90 },
-  { id: 'm012', nome: 'Argamassa AC-II (20kg)', unidade: 'saco', preco_medio: 26.50 },
-  { id: 'm013', nome: 'Areia Média', unidade: 'm³', preco_medio: 110.00 }
+  { id: 'm001', nome: 'Placa Drywall Standard ST 12.5mm', unidade: 'M²', preco_medio: 22.50 },
+  { id: 'm002', nome: 'Perfil Guia 70mm', unidade: 'Br', preco_medio: 18.90 },
+  { id: 'm003', nome: 'Perfil Montante 70mm', unidade: 'Br', preco_medio: 17.50 },
+  { id: 'm004', nome: 'Massa de Acabamento para Gesso', unidade: 'Sc', preco_medio: 42.00 },
+  { id: 'm005', nome: 'Tinta Acrílica Premium Suvinil 18L', unidade: 'Lt', preco_medio: 320.00 },
+  { id: 'm006', nome: 'Fundo Preparador 18L', unidade: 'Lt', preco_medio: 95.00 },
+  { id: 'm007', nome: 'Lixa para Parede 100', unidade: 'Un', preco_medio: 2.50 },
+  { id: 'm008', nome: 'Fita Telada Adesiva 50mm', unidade: 'Rl', preco_medio: 14.00 },
+  { id: 'm009', nome: 'Arame Galvanizado 18', unidade: 'Kg', preco_medio: 18.00 },
+  { id: 'm010', nome: 'Gesso Cola 1kg', unidade: 'Sc', preco_medio: 8.50 },
+  { id: 'm011', nome: 'Cimento Portland CP-II (50kg)', unidade: 'Sc', preco_medio: 34.90 },
+  { id: 'm012', nome: 'Argamassa AC-II (20kg)', unidade: 'Sc', preco_medio: 26.50 },
+  { id: 'm013', nome: 'Areia Média', unidade: 'M³', preco_medio: 110.00 }
 ];
 
 const FALLBACK_SERVICOS = [
@@ -198,7 +188,7 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
   const precoVenda = Number(servico.preco_total) || 0;
   const lucroBruto = precoVenda - custoTotal;
   const margemReal = precoVenda > 0 ? (lucroBruto / precoVenda) * 100 : Number(servico.margem_lucro) || 0;
-  const unidadeSigla = servico.unidade === 'm' ? 'ML' : (servico.unidade || 'Unidade');
+  const unidadeSigla = servico.unidade || "Un";
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden group">
@@ -344,7 +334,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
     nome: '',
     descricao: '',
     categoria: '',
-    unidade: 'Unidade',
+    unidade: 'Un',
     preco_total: 0,
     margem_lucro: 0,
     mao_de_obra: 0,
@@ -363,7 +353,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   const [materialSearch, setMaterialSearch] = useState('');
   const [showNewMaterial, setShowNewMaterial] = useState(false);
   const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'ML', preco_medio: '' });
+  const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'Ml', preco_medio: '' });
   const [savingMaterial, setSavingMaterial] = useState(false);
   const [localMateriais, setLocalMateriais] = useState(materiais);
 
@@ -498,13 +488,13 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
     try {
       const res = await api.post('/servicos/materiais', {
         nome: newMaterial.nome.trim(),
-        unidade: newMaterial.unidade.trim() || 'ML',
+        unidade: newMaterial.unidade.trim() || 'Un',
         preco_medio: parseFloat(String(newMaterial.preco_medio).replace(',', '.')) || 0,
       });
       const created = res.data;
       setLocalMateriais(prev => [...prev, created]);
       handleAddMaterial(created);
-      setNewMaterial({ nome: '', unidade: 'ML', preco_medio: '' });
+      setNewMaterial({ nome: '', unidade: 'Ml', preco_medio: '' });
       setShowNewMaterial(false);
     } catch (err) {
       console.error('Erro ao criar material', err);
@@ -546,16 +536,17 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
           <label className="block text-xs font-semibold text-slate-400 mb-1.5">
             Unidade de Medida
           </label>
-          <select
-            value={form.unidade === 'm' ? 'ML' : (form.unidade || 'Unidade')}
+          <input
+            list="unidades-list-servico"
+            value={form.unidade || "Un"}
             onChange={(e) => setForm({ ...form, unidade: e.target.value })}
             className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all cursor-pointer font-semibold"
-          >
-            {['ML', 'M²', 'M³', 'Unidade'].map(u => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
-          <span className="text-[10px] text-slate-500 mt-1 block">ML unifica M e ML (metro linear)</span>
+            placeholder="Selecione ou digite..."
+          />
+          <datalist id="unidades-list-servico">
+            {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => <option key={u} value={u} />)}
+          </datalist>
+          <span className="text-[10px] text-slate-500 mt-1 block">ML unifica M e ML (metro linear). Digite para unidade livre.</span>
         </div>
 
         <div className="md:col-span-2">
@@ -666,7 +657,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Resumo de Composição de Custo</span>
           </div>
           <span className="text-xs font-bold text-slate-400">
-            Unidade: <span className="text-emerald-400 font-semibold">{form.unidade === 'm' ? 'ML' : (form.unidade || 'Unidade')}</span>
+            Unidade: <span className="text-emerald-400 font-semibold">{form.unidade || "Un"}</span>
           </span>
         </div>
 
@@ -849,15 +840,18 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Unidade</label>
-                    <select
+                    <input
+                      list="unidades-list-avulso"
                       value={newMaterial.unidade}
                       onChange={(e) => setNewMaterial(p => ({ ...p, unidade: e.target.value }))}
                       className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    >
-                      {['ML', 'M²', 'M³', 'Unidade'].map(u => (
-                        <option key={u} value={u}>{u}</option>
+                      placeholder="Ex: ML, Unidade, Saco..."
+                    />
+                    <datalist id="unidades-list-avulso">
+                      {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => (
+                        <option key={u} value={u} />
                       ))}
-                    </select>
+                    </datalist>
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Preço Médio (R$)</label>
@@ -961,7 +955,7 @@ function OrcamentoModal({
   // Novo Insumo
   const [showNewMaterial, setShowNewMaterial] = useState(false);
   const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'ML', preco_medio: '' });
+  const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'Ml', preco_medio: '' });
   const [savingMaterial, setSavingMaterial] = useState(false);
 
   useEffect(() => {
@@ -1045,8 +1039,10 @@ function OrcamentoModal({
       tipo: 'servico',
       servico_nome: servico.nome,
       preco_unitario: Number(servico.preco_total) || 0,
+      preco_catalogo: Number(servico.preco_total) || 0,
+      unidade: servico.unidade || 'Vb',
       quantidade: 1,
-      desconto_percentual: 0,
+      fornecido_por: 'Edifica',
       materiais: servico.servico_materiais || [],
       mao_de_obra: servico.mao_de_obra || 0
     }]);
@@ -1054,16 +1050,16 @@ function OrcamentoModal({
 
   
   const handleAddAssistenteInsumos = (insumosList) => {
-    // Generate unique negative IDs for items that aren't exactly in catalog to distinguish
     const novosItens = insumosList.map((ins, idx) => ({
       servico_id: null,
-      material_id: -(Date.now() + idx), // ID temporário
+      material_id: ins.material_id,
       tipo: 'insumo',
-      servico_nome: ins.papel,
-      preco_unitario: Number(ins.precoBase) || 0,
-      quantidade: ins.qtd,
-      desconto_percentual: 0,
-      fornecido_por: ins.fornecidoPor
+      servico_nome: ins.descricao,
+      preco_unitario: Number(ins.preco_unitario) || 0,
+      preco_catalogo: Number(ins.preco_unitario) || 0,
+      quantidade: ins.qtd_compra,
+      unidade: ins.unidade,
+      fornecido_por: ins.fornecido_por || 'Edifica'
     }));
     setItens(prev => [...prev, ...novosItens]);
     setShowAssistenteDrywall(false);
@@ -1077,8 +1073,10 @@ function OrcamentoModal({
       tipo: 'insumo',
       servico_nome: material.nome,
       preco_unitario: Number(material.preco_medio) || 0,
+      preco_catalogo: Number(material.preco_medio) || 0,
+      unidade: material.unidade || 'Un',
       quantidade: 1,
-      desconto_percentual: 0,
+      fornecido_por: 'Edifica'
     }]);
   };
 
@@ -1087,13 +1085,13 @@ function OrcamentoModal({
     try {
       const res = await api.post('/servicos/materiais', {
         nome: newMaterial.nome.trim(),
-        unidade: newMaterial.unidade.trim() || 'ML',
+        unidade: newMaterial.unidade.trim() || 'Un',
         preco_medio: parseFloat(String(newMaterial.preco_medio).replace(',', '.')) || 0,
       });
       const created = res.data;
       if (onMaterialCreated) onMaterialCreated(created);
       handleAddMaterial(created);
-      setNewMaterial({ nome: '', unidade: 'ML', preco_medio: '' });
+      setNewMaterial({ nome: '', unidade: 'Ml', preco_medio: '' });
       setShowNewMaterial(false);
     } catch (err) {
       console.error('Erro ao criar material', err);
@@ -1140,8 +1138,7 @@ function OrcamentoModal({
   };
 
   const subtotalBruto = itens.reduce((sum, item) => sum + (item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade)), 0);
-  const totalDescontos = itens.reduce((sum, item) => sum + (item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade * (item.desconto_percentual / 100))), 0);
-  const totalLiquido = subtotalBruto - totalDescontos;
+  const totalLiquido = subtotalBruto;
   const fatorAcrescimo = 1 + ((margemBdiPercentual + impostosPercentual) / 100);
   const valorTotalFinal = totalLiquido * fatorAcrescimo;
 
@@ -1197,10 +1194,15 @@ function OrcamentoModal({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
           tipo: i.tipo,
-          descricao: i.servico_nome,
-          quantidade: i.quantidade,
-          preco_unitario: i.preco_unitario,
-          desconto_percentual: i.desconto_percentual,
+          descricao: i.servico_nome || i.descricao,
+          quantidade: Number(i.quantidade) || 0,
+          preco_unitario: Number(i.preco_unitario) || 0,
+          fornecido_por: i.fornecido_por || 'Edifica',
+          unidade: i.unidade,
+          preco_catalogo: i.preco_catalogo,
+          embalagem_id: i.embalagem_id || null,
+          origem_assistente: i.origem_assistente || false,
+          assistente_execucao_id: i.assistente_execucao_id || null,
         }))
       };
 
@@ -1216,7 +1218,12 @@ function OrcamentoModal({
       }
       onClose();
     } catch (err) {
-      setErrorMsg('Erro ao salvar orçamento. Tente novamente.');
+      console.error(err);
+      if (err.response && err.response.data && err.response.data.detail) {
+        setErrorMsg('Erro: ' + JSON.stringify(err.response.data.detail));
+      } else {
+        setErrorMsg('Erro ao salvar orçamento. Tente novamente.');
+      }
     } finally {
       setSaving(false);
     }
@@ -1256,10 +1263,15 @@ function OrcamentoModal({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
           tipo: i.tipo,
-          descricao: i.servico_nome,
-          quantidade: i.quantidade,
-          preco_unitario: i.preco_unitario,
-          desconto_percentual: i.desconto_percentual,
+          descricao: i.servico_nome || i.descricao,
+          quantidade: Number(i.quantidade) || 0,
+          preco_unitario: Number(i.preco_unitario) || 0,
+          fornecido_por: i.fornecido_por || 'Edifica',
+          unidade: i.unidade,
+          preco_catalogo: i.preco_catalogo,
+          embalagem_id: i.embalagem_id || null,
+          origem_assistente: i.origem_assistente || false,
+          assistente_execucao_id: i.assistente_execucao_id || null,
         }))
       };
 
@@ -1766,13 +1778,16 @@ function OrcamentoModal({
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Unidade</label>
-                    <select
+                    <input
+                      list="unidades-list-novo"
                       value={newMaterial.unidade}
                       onChange={(e) => setNewMaterial(p => ({ ...p, unidade: e.target.value }))}
                       className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-xs text-white"
-                    >
-                      {['ML', 'M²', 'M³', 'Unidade'].map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                      placeholder="Selecione ou digite..."
+                    />
+                    <datalist id="unidades-list-novo">
+                      {UNIDADES_INSUMO.map(u => <option key={u} value={u} />)}
+                    </datalist>
                   </div>
                   <div className="sm:col-span-3">
                     <label className="block text-[11px] text-slate-400 mb-1">Preço Médio (R$)</label>
@@ -1804,7 +1819,7 @@ function OrcamentoModal({
             <div>
               <h4 className="text-sm font-bold text-white mb-3 flex items-center justify-between">
                 <span>Composição da Proposta ({itens.length} {itens.length === 1 ? 'item' : 'itens'})</span>
-                <span className="text-xs text-slate-400 font-normal">Ajuste quantitativo e desconto</span>
+                <span className="text-xs text-slate-400 font-normal">Ajuste quantitativo e valor unitário</span>
               </h4>
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {itens.map((item, idx) => (
@@ -1816,7 +1831,16 @@ function OrcamentoModal({
                           <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold uppercase">Fornecido p/ Cliente</span>
                         )}
                       </div>
-                      <span className="text-[11px] text-slate-400">Unitário: {formatCurrency(item.preco_unitario)}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-slate-500 uppercase font-semibold">Unidade: <span className="text-slate-300 font-normal">{item.unidade || (item.tipo === 'insumo' ? 'Un' : 'Vb')}</span></span>
+                        {item.preco_unitario !== item.preco_catalogo && item.preco_catalogo !== undefined && (
+                          <div className="flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded ml-2">
+                            <span className="text-[9px] text-amber-400 uppercase font-bold">Valor Alterado</span>
+                            <span className="text-[9px] text-slate-400 line-through pl-1">{formatCurrency(item.preco_catalogo)}</span>
+                            <button onClick={() => handleUpdateItem(idx, 'preco_unitario', item.preco_catalogo)} className="text-amber-400 hover:text-amber-300 ml-1 bg-amber-500/20 rounded p-0.5" title="Restaurar valor do catálogo"><RotateCcw className="w-3 h-3" /></button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <div>
@@ -1829,18 +1853,18 @@ function OrcamentoModal({
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 block uppercase font-semibold">Desconto %</label>
+                        <label className="text-[10px] text-slate-500 block uppercase font-semibold">Valor Unitário</label>
                         <input
-                          type="number" step="0.5" min="0" max="100"
-                          value={item.desconto_percentual}
-                          onChange={(e) => handleUpdateItem(idx, 'desconto_percentual', e.target.value)}
-                          className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          type="number" step="0.01" min="0"
+                          value={item.preco_unitario}
+                          onChange={(e) => handleUpdateItem(idx, 'preco_unitario', e.target.value)}
+                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                         />
                       </div>
                       <div className="text-right min-w-[90px]">
                         <label className="text-[10px] text-slate-500 block uppercase font-semibold">Subtotal</label>
                         <span className="text-xs font-bold text-emerald-400">
-                          {formatCurrency(item.preco_unitario * item.quantidade * (1 - (item.desconto_percentual || 0) / 100))}
+                          {formatCurrency(item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade))}
                         </span>
                       </div>
                       <button
@@ -1860,15 +1884,9 @@ function OrcamentoModal({
               <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-6">
                   <div>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Subtotal Bruto</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Subtotal</span>
                     <span className="text-sm font-semibold text-slate-300">{formatCurrency(subtotalBruto)}</span>
                   </div>
-                  {totalDescontos > 0 && (
-                    <div>
-                      <span className="text-[10px] uppercase tracking-wider text-red-400 block">Descontos</span>
-                      <span className="text-sm font-semibold text-red-400">-{formatCurrency(totalDescontos)}</span>
-                    </div>
-                  )}
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] uppercase tracking-wider text-emerald-400 block font-bold">Valor Total da Proposta</span>
@@ -1915,6 +1933,7 @@ function OrcamentoModal({
         <AssistenteDrywallModal 
           onClose={() => setShowAssistenteDrywall(false)}
           onAddInsumos={handleAddAssistenteInsumos}
+          materiaisCatalog={materiais}
         />
       )}
 
@@ -2018,7 +2037,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
   // Modais de Insumos (Tabela de Valores)
   const [showInsumoModal, setShowInsumoModal] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState(null);
-  const [insumoForm, setInsumoForm] = useState({ nome: '', unidade: 'm²', preco_medio: '' });
+  const [insumoForm, setInsumoForm] = useState({ nome: '', unidade: 'M²', preco_medio: '' });
   const [savingInsumo, setSavingInsumo] = useState(false);
   const [showDeleteInsumoConfirm, setShowDeleteInsumoConfirm] = useState(null);
 
@@ -2112,7 +2131,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
 
   // Unidades distintas para o filtro da tabela de insumos
   const allUnidades = useMemo(() => {
-    const list = [...new Set(materiais.map(m => m.unidade === 'm' ? 'ML' : (m.unidade || 'un')).filter(Boolean))];
+    const list = [...new Set(materiais.map(m => m.unidade || "Un").filter(Boolean))];
     return list.sort();
   }, [materiais]);
 
@@ -2208,7 +2227,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     return materiais.filter(m => {
       const matchSearch = !tabelaSearch ||
         m.nome?.toLowerCase().includes(tabelaSearch.toLowerCase());
-      const unidFormatted = m.unidade === 'm' ? 'ML' : (m.unidade || 'un');
+      const unidFormatted = m.unidade || "Un";
       const matchUnidade = !tabelaUnidadeFilter || unidFormatted === tabelaUnidadeFilter;
       return matchSearch && matchUnidade;
     });
@@ -2269,7 +2288,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
   // Handlers do Modal de Insumos (Criar/Editar/Excluir)
   const handleOpenNewInsumo = () => {
     setEditingInsumo(null);
-    setInsumoForm({ nome: '', unidade: 'm²', preco_medio: '' });
+    setInsumoForm({ nome: '', unidade: 'M²', preco_medio: '' });
     setShowInsumoModal(true);
   };
 
@@ -2291,7 +2310,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
       const precoMedio = parseFloat(String(insumoForm.preco_medio).replace(',', '.')) || 0;
       const payload = {
         nome: insumoForm.nome.trim(),
-        unidade: insumoForm.unidade.trim() || 'un',
+        unidade: insumoForm.unidade.trim() || 'Un',
         preco_medio: precoMedio
       };
 
@@ -3107,7 +3126,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                     {filteredTabelaMateriais.map((material) => {
                       const isEditing = inlineEditingId === material.id;
                       const isSaving = savingValoresId === material.id;
-                      const unidSigla = material.unidade === 'm' ? 'ML' : (material.unidade || 'un');
+                      const unidSigla = material.unidade || "Un";
                       const usageCount = getMaterialUsageCount(material.id);
 
                       return (
@@ -3381,15 +3400,19 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               <label className="text-xs font-semibold text-slate-300 block mb-1.5">
                 Unidade de Medida <span className="text-red-400">*</span>
               </label>
-              <select
+              <input
+                type="text"
+                list="unidades-list-modal"
                 value={insumoForm.unidade}
                 onChange={(e) => setInsumoForm({ ...insumoForm, unidade: e.target.value })}
                 className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer"
-              >
-                {UNIDADES_INSUMO.map(u => (
-                  <option key={u.value} value={u.value}>{u.label}</option>
+                placeholder="Selecione ou digite..."
+              />
+              <datalist id="unidades-list-modal">
+                {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => (
+                  <option key={u} value={u} />
                 ))}
-              </select>
+              </datalist>
             </div>
 
             <div>

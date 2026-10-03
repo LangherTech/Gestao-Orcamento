@@ -285,8 +285,8 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
                 const imp = impostosPercentual || 0;
                 const fatorAcrescimo = 1 + ((bdi + imp) / 100);
                 const isCliente = i.fornecido_por === 'Cliente';
-                const sub = isCliente ? 0 : i.preco_unitario * i.quantidade * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
-                const unitFinal = isCliente ? 0 : i.preco_unitario * (1 - (i.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                const sub = isCliente ? 0 : i.preco_unitario * i.quantidade * fatorAcrescimo;
+                const unitFinal = isCliente ? 0 : i.preco_unitario * fatorAcrescimo;
                 
                 let html = `
                   <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 9.8pt; border-bottom: 1px dashed #e2e8f0;">
@@ -295,7 +295,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
                   </div>
                 `;
 
-                if (modoVisualizacao === 'detalhado') {
+                if (modoVisualizacao === 'detalhado' && !isCliente) {
                     html += `
                       <div style="padding-left: 12px; margin-bottom: 8px; font-size: 8.5pt; color: #64748b; line-height: 1.4;">
                         <div><span style="font-weight: 600;">Valor Unitário:</span> ${formatCurrency(unitFinal)}</div>
@@ -629,16 +629,17 @@ export function PropostaComercialPreviewModal({
                   const bdi = margemBdiPercentual || 0;
                   const imp = impostosPercentual || 0;
                   const fatorAcrescimo = 1 + ((bdi + imp) / 100);
-                  const sub = it.preco_unitario * it.quantidade * (1 - (it.desconto_percentual || 0) / 100) * fatorAcrescimo;
-                  const unitFinal = it.preco_unitario * (1 - (it.desconto_percentual || 0) / 100) * fatorAcrescimo;
+                  const isCliente = it.fornecido_por === 'Cliente';
+                  const sub = isCliente ? 0 : it.preco_unitario * it.quantidade * fatorAcrescimo;
+                  const unitFinal = isCliente ? 0 : it.preco_unitario * fatorAcrescimo;
                   
                   return (
                     <div key={idx} className="py-1 border-b border-slate-200/60 last:border-0">
                       <div className="flex justify-between">
-                        <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''}</span>
-                        <span className="font-bold text-slate-900">{formatCurrency(sub)}</span>
+                        <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''} {isCliente && <span className="text-[10px] text-amber-600 font-bold ml-1">(Fornecido pelo Cliente)</span>}</span>
+                        <span className="font-bold text-slate-900">{isCliente ? '-' : formatCurrency(sub)}</span>
                       </div>
-                      {modoVisualizacao === 'detalhado' && (
+                      {modoVisualizacao === 'detalhado' && !isCliente && (
                         <div className="pl-3 mt-1 mb-1 text-[10px] text-slate-500 font-medium">
                           <div><span className="font-semibold text-slate-700">Valor Unitário:</span> {formatCurrency(unitFinal)}</div>
                           {it.mao_de_obra > 0 && (

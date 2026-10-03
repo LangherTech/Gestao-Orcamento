@@ -7,8 +7,10 @@ from ..models.servicos import (
     MaterialCreate, MaterialUpdate, MaterialResponse,
     ServicoMaterialInput,
     OrcamentoGerarRequest,
-    OrcamentoCreate, OrcamentoUpdate, OrcamentoStatusUpdate, OrcamentoResponse
+    OrcamentoCreate, OrcamentoUpdate, OrcamentoStatusUpdate, OrcamentoResponse,
+    AssistenteDrywallInput, AssistenteDrywallItemResponse, AssistenteInsumoUpdate
 )
+import math
 from ..middleware.auth import get_current_user
 from ..db.client import get_supabase_client
 import logging
@@ -70,15 +72,45 @@ async def create_material(material: MaterialCreate, user: dict = Depends(get_cur
 
 @router.put("/materiais/{material_id}", response_model=dict)
 async def update_material(material_id: UUID, material: MaterialUpdate, user: dict = Depends(get_current_user)):
-    """Atualiza um material existente."""
+    """Atualiza um material existente e recalcula os custos dos serviços que o utilizam."""
     supabase = get_supabase_client()
     update_data = material.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
+    
     if supabase:
+        # Atualiza o material
         res = supabase.table("materiais").update(update_data).eq("id", str(material_id)).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Material não encontrado.")
+            
+        # Cascata de preço
+        novo_preco = update_data.get("preco_medio")
+        if novo_preco is not None:
+            # 1. Atualizar preco_unitario em servico_materiais
+            supabase.table("servico_materiais").update({"preco_unitario": novo_preco}).eq("material_id", str(material_id)).execute()
+            
+            # 2. Recalcular o custo_materiais e lucro dos serviços afetados
+            sm_res = supabase.table("servico_materiais").select("servico_id").eq("material_id", str(material_id)).execute()
+            if sm_res.data:
+                afetados = list(set([sm["servico_id"] for sm in sm_res.data]))
+                for s_id in afetados:
+                    mat_res = supabase.table("servico_materiais").select("quantidade, rendimento, preco_unitario").eq("servico_id", str(s_id)).execute()
+                    custo_mat = sum(float(m.get("quantidade", 0)) * float(m.get("preco_unitario", 0)) for m in (mat_res.data or []))
+                        
+                    srv_res = supabase.table("servicos").select("mao_de_obra, preco_total").eq("id", str(s_id)).execute()
+                    if srv_res.data:
+                        srv = srv_res.data[0]
+                        mao_de_obra = float(srv.get("mao_de_obra", 0))
+                        preco_total = float(srv.get("preco_total", 0))
+                        custo_total = custo_mat + mao_de_obra
+                        lucro_bruto = preco_total - custo_total
+                        margem = (lucro_bruto / preco_total * 100) if preco_total > 0 else 0.0
+                        
+                        supabase.table("servicos").update({
+                            "margem_lucro": margem
+                        }).eq("id", str(s_id)).execute()
+                        
         return res.data[0]
     return {"id": str(material_id), **update_data}
 
@@ -243,19 +275,24 @@ async def gerar_orcamento(req: OrcamentoGerarRequest, user: dict = Depends(get_c
             preco_unit = 0
             servico_data = {"nome": item.descricao or "Item"}
 
-        subtotal_item = preco_unit * item.quantidade
-        desconto_valor = subtotal_item * (item.desconto_percentual / 100)
-        total_item = subtotal_item - desconto_valor
+        if item.fornecido_por == "Cliente":
+            total_item = 0.0
+        else:
+            total_item = preco_unit * item.quantidade
+
         subtotal_geral += total_item
 
         itens_orcamento.append({
-            "servico_id": str(item.servico_id),
+            "servico_id": str(item.servico_id) if item.servico_id else None,
+            "material_id": str(item.material_id) if item.material_id else None,
+            "tipo": item.tipo,
+            "fornecido_por": item.fornecido_por,
+            "unidade": item.unidade,
+            "preco_catalogo": item.preco_catalogo,
             "servico_nome": servico_data.get("nome", ""),
             "quantidade": item.quantidade,
             "preco_unitario": preco_unit,
-            "subtotal": subtotal_item,
-            "desconto_percentual": item.desconto_percentual,
-            "desconto_valor": round(desconto_valor, 2),
+            "subtotal": round(total_item, 2),
             "total": round(total_item, 2)
         })
 
@@ -372,12 +409,12 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
                     except Exception:
                         pass
 
-        sub_bruto = preco_unit * item.quantidade
-        desc_val = sub_bruto * (item.desconto_percentual / 100)
-        sub_liquido = sub_bruto - desc_val
+        if item.fornecido_por == "Cliente":
+            sub_liquido = 0.0
+        else:
+            sub_liquido = preco_unit * item.quantidade
 
-        subtotal_geral += sub_bruto
-        desconto_total += desc_val
+        subtotal_geral += sub_liquido
 
         itens_processados.append({
             "id": f"item-{uuid4().hex[:8]}",
@@ -385,14 +422,19 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             "servico_id": str(item.servico_id) if item.servico_id else None,
             "material_id": str(item.material_id) if item.material_id else None,
             "tipo": item.tipo,
+            "fornecido_por": item.fornecido_por,
+            "unidade": item.unidade,
+            "preco_catalogo": item.preco_catalogo,
+            "embalagem_id": str(item.embalagem_id) if item.embalagem_id else None,
+            "origem_assistente": item.origem_assistente,
+            "assistente_execucao_id": item.assistente_execucao_id,
             "descricao": descricao,
             "quantidade": item.quantidade,
             "preco_unitario": preco_unit,
-            "desconto_percentual": item.desconto_percentual,
             "subtotal": round(sub_liquido, 2)
         })
 
-    total_liquido = subtotal_geral - desconto_total
+    total_liquido = subtotal_geral
     fator_acrescimo = 1 + ((orcamento.margem_bdi_percentual + orcamento.impostos_percentual) / 100)
     valor_total = round(total_liquido * fator_acrescimo, 2)
 
@@ -409,7 +451,6 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         "prazo_garantia": orcamento.prazo_garantia,
         "objetivo": orcamento.objetivo,
         "subtotal": round(subtotal_geral, 2),
-        "desconto_total": round(desconto_total, 2),
         "valor_total": valor_total,
         "validade_dias": orcamento.validade_dias,
         "status": orcamento.status,
@@ -459,19 +500,19 @@ async def update_orcamento(
 
     # Recalcula
     subtotal_geral = 0.0
-    desconto_total = 0.0
     itens_processados = []
 
     if orcamento.itens is not None:
         for item in orcamento.itens:
             preco_unit = item.preco_unitario or 0.0
             descricao = item.descricao or "Item"
-            sub_bruto = preco_unit * item.quantidade
-            desc_val = sub_bruto * (item.desconto_percentual / 100)
-            sub_liquido = sub_bruto - desc_val
+            
+            if item.fornecido_por == "Cliente":
+                sub_liquido = 0.0
+            else:
+                sub_liquido = preco_unit * item.quantidade
 
-            subtotal_geral += sub_bruto
-            desconto_total += desc_val
+            subtotal_geral += sub_liquido
 
             itens_processados.append({
                 "id": item.id if hasattr(item, "id") and item.id else f"item-{uuid4().hex[:8]}",
@@ -479,14 +520,19 @@ async def update_orcamento(
                 "servico_id": str(item.servico_id) if item.servico_id else None,
                 "material_id": str(item.material_id) if hasattr(item, "material_id") and item.material_id else None,
                 "tipo": item.tipo,
+                "fornecido_por": item.fornecido_por,
+                "unidade": item.unidade,
+                "preco_catalogo": item.preco_catalogo,
+                "embalagem_id": str(item.embalagem_id) if item.embalagem_id else None,
+                "origem_assistente": item.origem_assistente,
+                "assistente_execucao_id": item.assistente_execucao_id,
                 "descricao": descricao,
                 "quantidade": item.quantidade,
                 "preco_unitario": preco_unit,
-                "desconto_percentual": item.desconto_percentual,
                 "subtotal": round(sub_liquido, 2)
             })
 
-    total_liquido = subtotal_geral - desconto_total
+    total_liquido = subtotal_geral
     bdi = orcamento.margem_bdi_percentual if orcamento.margem_bdi_percentual is not None else 0.0
     imp = orcamento.impostos_percentual if orcamento.impostos_percentual is not None else 0.0
     fator_acrescimo = 1 + ((bdi + imp) / 100)
@@ -505,7 +551,6 @@ async def update_orcamento(
 
     if orcamento.itens is not None:
         update_dict["subtotal"] = round(subtotal_geral, 2)
-        update_dict["desconto_total"] = round(desconto_total, 2)
         update_dict["valor_total"] = valor_total
 
     if supabase:
@@ -850,3 +895,180 @@ async def remove_material_from_servico(
     if supabase:
         supabase.table("servico_materiais").delete().eq("id", str(composicao_id)).execute()
     return None
+
+# ========================================
+# ASSISTENTES
+# ========================================
+
+@router.get("/assistentes/insumos", response_model=List[dict])
+async def list_assistente_insumos(
+    assistente: Optional[str] = Query(None),
+    user: dict = Depends(get_current_user)
+):
+    supabase = get_supabase_client()
+    if not supabase:
+        return []
+    query = supabase.table("assistente_insumos").select("*, materiais(*)")
+    if assistente:
+        query = query.eq("assistente", assistente)
+    res = query.execute()
+    return res.data or []
+
+@router.put("/assistentes/insumos/{papel}", response_model=dict)
+async def update_assistente_insumo(
+    papel: str,
+    payload: AssistenteInsumoUpdate,
+    user: dict = Depends(get_current_user)
+):
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database error")
+    
+    res = supabase.table("assistente_insumos").update({
+        "material_id": str(payload.material_id),
+
+    }).eq("papel", papel).execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Insumo do assistente não encontrado")
+    return res.data[0]
+
+@router.post("/assistentes/drywall/calcular", response_model=List[AssistenteDrywallItemResponse])
+async def calcular_drywall(
+    input_data: AssistenteDrywallInput,
+    user: dict = Depends(get_current_user)
+):
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database not available")
+
+    # Fetch mappings and materials
+    res = supabase.table("assistente_insumos").select("*, materiais(id, nome, unidade, preco_medio)").eq("assistente", "drywall").execute()
+    mapeamentos = { item["papel"]: item for item in res.data } if res.data else {}
+    
+    # Fetch embalagens for these materials
+    mat_ids = [m["materiais"]["id"] for m in mapeamentos.values() if m.get("materiais")]
+    embalagens_por_mat = {}
+    if mat_ids:
+        emb_res = supabase.table("insumo_embalagens").select("*").in_("material_id", mat_ids).execute()
+        for emb in (emb_res.data or []):
+            mid = emb["material_id"]
+            if mid not in embalagens_por_mat:
+                embalagens_por_mat[mid] = []
+            embalagens_por_mat[mid].append(emb)
+
+    PERDA = input_data.perda_percentual / 100.0
+    linhas = []
+
+    def adicionar_linha(papel, qtd_liquida_uso, descricao_fallback):
+        map_item = mapeamentos.get(papel)
+        unidade_uso = map_item.get("unidade_uso", "un") if map_item else "un"
+        mat = map_item.get("materiais") if map_item else None
+        
+        qtd_com_perda = qtd_liquida_uso * (1 + PERDA)
+        embalagens_recomendadas = []
+        qtd_compra = 0.0
+        preco_unitario = 0.0
+        sobra_unidades = 0.0
+        embalagem_id = None
+        
+        if mat:
+            embs = embalagens_por_mat.get(mat["id"], [])
+            # Sort packaging by qty to optimize
+            embs_sorted = sorted(embs, key=lambda x: x["quantidade_unidades"], reverse=True)
+            
+            restante = qtd_com_perda
+            escolhidas = {}
+            for emb in embs_sorted:
+                if restante <= 0: break
+                qtd_emb = math.floor(restante / emb["quantidade_unidades"])
+                if qtd_emb > 0:
+                    escolhidas[emb["id"]] = {"emb": emb, "qtd": qtd_emb}
+                    restante -= qtd_emb * emb["quantidade_unidades"]
+            
+            if restante > 0 and embs_sorted:
+                smallest = embs_sorted[-1]
+                for emb in reversed(embs_sorted):
+                    if emb["quantidade_unidades"] >= restante:
+                        smallest = emb
+                        break
+                if smallest["id"] in escolhidas:
+                    escolhidas[smallest["id"]]["qtd"] += 1
+                else:
+                    escolhidas[smallest["id"]] = {"emb": smallest, "qtd": 1}
+                restante -= smallest["quantidade_unidades"]
+            
+            sobra_unidades = -restante if restante < 0 else 0.0
+            
+            for eid, data in escolhidas.items():
+                embalagens_recomendadas.append({
+                    "id": eid,
+                    "nome": data["emb"]["nome"],
+                    "quantidade": data["qtd"],
+                    "quantidade_unidades": data["emb"]["quantidade_unidades"],
+                    "preco": data["emb"]["preco"],
+                    "unidade_compra": data["emb"]["unidade_compra"]
+                })
+                qtd_compra += data["qtd"]
+                
+            if len(embalagens_recomendadas) >= 1:
+                embalagem_id = embalagens_recomendadas[0]["id"]
+                preco_unitario = embalagens_recomendadas[0]["preco"]
+
+        linhas.append(AssistenteDrywallItemResponse(
+            papel=papel,
+            descricao=mat["nome"] if mat else descricao_fallback,
+            material_id=map_item.get("material_id") if map_item else None,
+            unidade=mat["unidade"] if mat else unidade_uso,
+            qtd_liquida_uso=qtd_liquida_uso,
+            unidade_uso=unidade_uso,
+            qtd_compra=qtd_compra,
+            preco_unitario=preco_unitario,
+            fornecido_por="Edifica",
+            sem_vinculo=(mat is None),
+            embalagens_recomendadas=embalagens_recomendadas,
+            embalagem_id=embalagem_id,
+            sobra_unidades=sobra_unidades
+        ))
+
+    # Lógica base
+    area = input_data.area_m2
+    comp = input_data.comprimento_m
+    pe_dir = input_data.pe_direito_m
+
+    # Placas
+    area_placa = 1.20 * 1.80
+    if input_data.formato_placa == "1.20 x 1.80":
+        area_placa = 2.16
+    elif input_data.formato_placa == "1.20 x 2.40":
+        area_placa = 2.88
+    
+    qtd_placas = (area * 2) / area_placa
+    papel_placa = f"placa_{input_data.tipo_placa.lower()}"
+    adicionar_linha(papel_placa, qtd_placas, f"Placa de Gesso {input_data.tipo_placa} {input_data.formato_placa}")
+
+    if input_data.modo == "exato":
+        qtd_montantes = math.ceil(comp / (input_data.modulacao_mm / 1000.0)) + 1
+        qtd_montantes += (input_data.n_vaos * 2)
+        qtd_montantes += input_data.n_quinas_t
+        adicionar_linha("montante", qtd_montantes, "Montante 70mm")
+        
+        qtd_guias = comp * 2
+        adicionar_linha("guia", qtd_guias, "Guia 70mm")
+    else:
+        coef = 1.8 if input_data.modulacao_mm == 600 else 2.8
+        metros_montante = area * coef
+        qtd_montantes = metros_montante / 3.0
+        adicionar_linha("montante", qtd_montantes, "Montante 70mm")
+        
+        metros_guia = area * (2 / pe_dir)
+        adicionar_linha("guia", metros_guia, "Guia 70mm")
+
+    adicionar_linha("parafuso_gn25", area * 29.0, "Parafuso TA25 (GN25)")
+    adicionar_linha("parafuso_lb", area * 7.0, "Parafuso TR13 (LB)")
+    adicionar_linha("bucha", area * 1.75, "Bucha com Parafuso")
+    adicionar_linha("fita", area * 3.15, "Fita Telada/Papel")
+    adicionar_linha("massa", area * 0.95, "Massa para Drywall")
+    adicionar_linha("banda", comp * 2, "Banda Acústica")
+
+    return linhas
