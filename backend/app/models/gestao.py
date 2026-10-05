@@ -35,6 +35,15 @@ class ContratoEmpreiteiroBase(BaseModel):
     escopo: Optional[str] = None
     condicoes_pagamento: Optional[str] = None
     status: str = Field("ativo")
+    arquivado: bool = False
+
+class PagamentoTerceiroCreate(BaseModel):
+    contrato_id: UUID
+    data_pagamento: str
+    valor_pago: float
+    tipo_pagamento: str = "Semanal"
+    anexo_url: Optional[str] = None
+    observacoes: Optional[str] = None
 
 class ContratoEmpreiteiroResponse(ContratoEmpreiteiroBase):
     id: UUID

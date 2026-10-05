@@ -9,6 +9,7 @@ import { formatTelefone, formatCPFouCNPJ } from '../utils/masks';
 
 export default function GestaoPage({ obras = [], user }) {
   const [activeTab, setActiveTab] = useState('terceiros'); // 'terceiros' | 'contratos'
+  const [contratoStatusFilter, setContratoStatusFilter] = useState('ativos');
   const [contratos, setContratos] = useState([]);
   const [empreiteiros, setEmpreiteiros] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,7 +54,10 @@ export default function GestaoPage({ obras = [], user }) {
 
   const [pagamentoData, setPagamentoData] = useState({
     data_pagamento: new Date().toISOString().split('T')[0],
-    valor_pago: ''
+    valor_pago: '',
+    tipo_pagamento: 'Semanal',
+    anexo_url: '',
+    observacoes: ''
   });
 
   const showToast = (message, type = 'success') => {
@@ -118,10 +122,10 @@ export default function GestaoPage({ obras = [], user }) {
     try {
       if (editingEmpreiteiro) {
         await api.put(`/gestao/empreiteiros/${editingEmpreiteiro.id}`, empForm);
-        showToast(`Empreiteiro "${empForm.nome}" atualizado com sucesso!`);
+        showToast(`Terceiro "${empForm.nome}" atualizado com sucesso!`);
       } else {
         await api.post('/gestao/empreiteiros', empForm);
-        showToast(`Novo empreiteiro "${empForm.nome}" cadastrado com sucesso!`);
+        showToast(`Terceiro "${empForm.nome}" cadastrado com sucesso!`);
       }
       setIsEmpModalOpen(false);
       setEditingEmpreiteiro(null);
@@ -139,7 +143,7 @@ export default function GestaoPage({ obras = [], user }) {
     if (!deletingEmpreiteiro) return;
     try {
       await api.delete(`/gestao/empreiteiros/${deletingEmpreiteiro.id}`);
-      showToast(`Empreiteiro "${deletingEmpreiteiro.nome}" removido com sucesso.`);
+      showToast(`Terceiro "${deletingEmpreiteiro.nome}" removido com sucesso.`);
       setIsDeleteEmpModalOpen(false);
       setDeletingEmpreiteiro(null);
       fetchDados();
@@ -186,18 +190,48 @@ export default function GestaoPage({ obras = [], user }) {
     try {
       const payload = {
         contrato_id: selectedContratoId,
-        data_medicao: pagamentoData.data_pagamento,
-        quantidade_executada: 1, // Fixado para compatibilidade
-        preco_unitario: parseFloat(String(pagamentoData.valor_pago || 0).replace(',', '.')) || 0
+        data_pagamento: pagamentoData.data_pagamento,
+        valor_pago: parseFloat(String(pagamentoData.valor_pago || 0).replace(',', '.')) || 0,
+        tipo_pagamento: pagamentoData.tipo_pagamento || 'Semanal',
+        anexo_url: pagamentoData.anexo_url || null,
+        observacoes: pagamentoData.observacoes || ''
       };
-      await api.post('/gestao/medicoes', payload);
+      await api.post('/gestao/pagamentos', payload);
       showToast('Pagamento registrado com sucesso!');
       setIsMedicaoModalOpen(false);
-      setPagamentoData({ data_pagamento: new Date().toISOString().split('T')[0], valor_pago: '' });
+      setPagamentoData({ data_pagamento: new Date().toISOString().split('T')[0], valor_pago: '', tipo_pagamento: 'Semanal', observacoes: '', anexo_url: '' });
       fetchDados();
     } catch (err) {
       console.error("Erro ao registrar pagamento:", err);
       showToast('Erro ao registrar pagamento.', 'error');
+    }
+  };
+
+  const handleUpdateContratoStatus = async (id, newStatus, arquivado) => {
+    if (newStatus === 'cancelado') {
+      const confirm = window.confirm("ATENÇÃO: Cancelar o contrato é irreversível, estornará os pagamentos e o saldo voltará para a obra. Confirma?");
+      if (!confirm) return;
+    }
+    
+    try {
+      await api.patch(`/gestao/contratos/${id}/status`, { status: newStatus, arquivado });
+      showToast(`Contrato ${newStatus === 'cancelado' ? 'cancelado' : 'atualizado'} com sucesso!`);
+      fetchDados();
+    } catch (err) {
+      console.error("Erro ao atualizar status:", err);
+      showToast('Erro ao atualizar status do contrato.', 'error');
+    }
+  };
+
+  const handleDeleteContrato = async (id) => {
+    if (!window.confirm("Deseja realmente excluir este contrato?")) return;
+    try {
+      await api.delete(`/gestao/contratos/${id}`);
+      showToast('Contrato excluído com sucesso!');
+      fetchDados();
+    } catch (err) {
+      console.error("Erro ao excluir contrato:", err);
+      showToast('Erro ao excluir contrato.', 'error');
     }
   };
 
@@ -230,11 +264,37 @@ export default function GestaoPage({ obras = [], user }) {
     });
   }, [empreiteiros, searchTerm, selectedArea]);
 
-  // Contratos filtrados por obra
+  // Contratos filtrados por obra, busca e status
   const contratosFiltrados = useMemo(() => {
-    if (filtroObraContrato === 'todas') return contratos;
-    return contratos.filter(c => String(c.obra_id) === String(filtroObraContrato));
-  }, [contratos, filtroObraContrato]);
+    let filtered = contratos;
+    
+    // Filtro de obra
+    if (filtroObraContrato !== 'todas') {
+      filtered = filtered.filter(c => String(c.obra_id) === String(filtroObraContrato));
+    }
+    
+    // Filtro de busca global
+    const term = searchTerm.toLowerCase().trim();
+    if (term) {
+      filtered = filtered.filter(c => 
+        (c.empreiteiro_nome && c.empreiteiro_nome.toLowerCase().includes(term)) ||
+        (c.escopo && c.escopo.toLowerCase().includes(term)) ||
+        (c.obra_nome && c.obra_nome.toLowerCase().includes(term))
+      );
+    }
+    
+    // Filtro de Status
+    if (contratoStatusFilter === 'ativos') {
+      filtered = filtered.filter(c => c.status === 'ativo' && !c.arquivado);
+    } else if (contratoStatusFilter === 'arquivados') {
+      filtered = filtered.filter(c => c.status === 'finalizado' || c.arquivado);
+    } else if (contratoStatusFilter === 'cancelados') {
+      filtered = filtered.filter(c => c.status === 'cancelado');
+    }
+    // 'todos' não filtra por status
+
+    return filtered;
+  }, [contratos, filtroObraContrato, searchTerm, contratoStatusFilter]);
 
   // Estatísticas gerais
   const stats = useMemo(() => {
@@ -371,7 +431,7 @@ export default function GestaoPage({ obras = [], user }) {
           }`}
         >
           <HardHat className="w-4 h-4" />
-          <span>Empreiteiros & Parceiros</span>
+          <span>Terceiros & Parceiros</span>
           <span className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300 font-normal">
             {empreiteiros.length}
           </span>
@@ -459,7 +519,7 @@ export default function GestaoPage({ obras = [], user }) {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Cadastrar Primeiro Empreiteiro</span>
+                <span>Cadastrar Primeiro Terceiro</span>
               </button>
             </div>
           ) : (
@@ -517,7 +577,7 @@ export default function GestaoPage({ obras = [], user }) {
                               setDeletingEmpreiteiro(emp);
                               setIsDeleteEmpModalOpen(true);
                             }}
-                            title="Excluir Empreiteiro"
+                            title="Excluir Terceiro"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-all cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -614,8 +674,8 @@ export default function GestaoPage({ obras = [], user }) {
       {/* ======================================================== */}
       {activeTab === 'contratos' && (
         <div className="space-y-4">
-          {/* Filtro por Obra */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
+          {/* Filtro por Obra e Status */}
+          <div className="flex flex-col gap-3 md:flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-slate-400" />
               <label className="text-xs font-medium text-slate-400">Filtrar por Obra:</label>
@@ -629,6 +689,22 @@ export default function GestaoPage({ obras = [], user }) {
                   <option key={o.id} value={o.id}>{o.nome}</option>
                 ))}
               </select>
+            </div>
+            
+            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+              {['ativos', 'arquivados', 'cancelados', 'todos'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => setContratoStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
+                    contratoStatusFilter === status 
+                      ? 'bg-slate-800 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
             </div>
 
             <button
@@ -699,16 +775,55 @@ export default function GestaoPage({ obras = [], user }) {
                     )}
                   </div>
 
-                  <button 
-                    onClick={() => {
-                      setSelectedContratoId(c.id);
-                      setIsMedicaoModalOpen(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all cursor-pointer border border-slate-700/60"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Registrar Boletim de Medição</span>
-                  </button>
+                  <div className="flex flex-col gap-2 mt-4">
+                    {(!c.status || c.status === 'ativo') && !c.arquivado && (
+                      <>
+                        <button 
+                          onClick={() => {
+                            setSelectedContratoId(c.id);
+                            setIsMedicaoModalOpen(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all cursor-pointer border border-slate-700/60"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Registrar Pagamento</span>
+                        </button>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleUpdateContratoStatus(c.id, 'finalizado', true)}
+                            className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all cursor-pointer"
+                          >
+                            Finalizar (Arquivar)
+                          </button>
+                          <button 
+                            onClick={() => handleUpdateContratoStatus(c.id, 'cancelado', false)}
+                            className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {(c.status === 'finalizado' || c.arquivado) && c.status !== 'cancelado' && (
+                      <button 
+                        onClick={() => handleUpdateContratoStatus(c.id, 'ativo', false)}
+                        className="w-full py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700/60"
+                      >
+                        Reativar (Desarquivar)
+                      </button>
+                    )}
+
+                    {c.status === 'cancelado' && (
+                      <button 
+                        onClick={() => handleDeleteContrato(c.id)}
+                        className="w-full py-2 rounded-xl text-xs font-semibold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-all cursor-pointer border border-rose-500/20 flex items-center justify-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Excluir Definitivamente</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -726,7 +841,7 @@ export default function GestaoPage({ obras = [], user }) {
               <div className="flex items-center gap-2">
                 <HardHat className="w-5 h-5 text-emerald-400" />
                 <h3 className="text-base font-bold text-white">
-                  {editingEmpreiteiro ? `Editar Empreiteiro — ${editingEmpreiteiro.nome}` : 'Cadastrar Novo Empreiteiro'}
+                  {editingEmpreiteiro ? `Editar Terceiro — ${editingEmpreiteiro.nome}` : 'Cadastrar Novo Terceiro'}
                 </h3>
               </div>
               <button onClick={() => setIsEmpModalOpen(false)} className="text-slate-400 hover:text-white">
@@ -817,7 +932,7 @@ export default function GestaoPage({ obras = [], user }) {
                       onChange={e => setEmpForm({...empForm, ativo: e.target.checked})} 
                       className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
                     />
-                    <span>Empreiteiro Ativo para novos contratos</span>
+                    <span>Terceiro Ativo para novos contratos</span>
                   </label>
                 </div>
               </form>
@@ -836,7 +951,7 @@ export default function GestaoPage({ obras = [], user }) {
                 form="emp-form" 
                 className="px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg transition-all"
               >
-                {editingEmpreiteiro ? 'Salvar Alterações' : 'Cadastrar Empreiteiro'}
+                {editingEmpreiteiro ? 'Salvar Alterações' : 'Cadastrar Terceiro'}
               </button>
             </div>
           </div>
@@ -854,9 +969,9 @@ export default function GestaoPage({ obras = [], user }) {
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-white">Excluir Empreiteiro?</h3>
+              <h3 className="text-lg font-bold text-white">Excluir Terceiro?</h3>
               <p className="text-xs text-slate-300 mt-1">
-                Tem certeza que deseja remover o empreiteiro <strong className="text-white">"{deletingEmpreiteiro.nome}"</strong>?
+                Tem certeza que deseja remover o terceiro <strong className="text-white">"{deletingEmpreiteiro.nome}"</strong>?
               </p>
               {deletingEmpreiteiro.contratos_ativos > 0 && (
                 <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
@@ -896,7 +1011,7 @@ export default function GestaoPage({ obras = [], user }) {
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-base font-bold text-white">Novo Contrato de Empreiteiro</h3>
+                <h3 className="text-base font-bold text-white">Novo Contrato de Terceiro</h3>
               </div>
               <button onClick={() => setIsContratoModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -920,14 +1035,14 @@ export default function GestaoPage({ obras = [], user }) {
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Empreiteiro / Terceirizado *</label>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Terceiro / Prestador *</label>
                     <select 
                       required 
                       value={contratoData.empreiteiro_id} 
                       onChange={e => setContratoData({...contratoData, empreiteiro_id: e.target.value})} 
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
                     >
-                      <option value="">Selecione o Empreiteiro...</option>
+                      <option value="">Selecione o Terceiro...</option>
                       {empreiteiros?.map(e => <option key={e.id} value={e.id}>{e.nome} {e.area_atuacao ? `(${e.area_atuacao})` : ''}</option>)}
                     </select>
                   </div>
@@ -1022,25 +1137,64 @@ export default function GestaoPage({ obras = [], user }) {
             <div className="p-6">
               <form id="med-form" onSubmit={handleCreatePagamento} className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data do Pagamento</label>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Tipo da Parcela</label>
+                  <select 
+                    value={pagamentoData.tipo_pagamento} 
+                    onChange={e => setPagamentoData({...pagamentoData, tipo_pagamento: e.target.value})} 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="Semanal">Semanal</option>
+                    <option value="Quinzenal">Quinzenal</option>
+                    <option value="Mensal">Mensal</option>
+                    <option value="Final/Única">Final/Única</option>
+                    <option value="Adiantamento">Adiantamento</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data do Pagamento</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={pagamentoData.data_pagamento} 
+                      onChange={e => setPagamentoData({...pagamentoData, data_pagamento: e.target.value})} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor Pago (R$)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      required 
+                      value={pagamentoData.valor_pago} 
+                      onChange={e => setPagamentoData({...pagamentoData, valor_pago: e.target.value})} 
+                      placeholder="0.00" 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Anexo / Comprovante (URL)</label>
                   <input 
-                    type="date" 
-                    required 
-                    value={pagamentoData.data_pagamento} 
-                    onChange={e => setPagamentoData({...pagamentoData, data_pagamento: e.target.value})} 
+                    type="url" 
+                    value={pagamentoData.anexo_url} 
+                    onChange={e => setPagamentoData({...pagamentoData, anexo_url: e.target.value})} 
+                    placeholder="https://..." 
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor Pago (R$)</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    required 
-                    value={pagamentoData.valor_pago} 
-                    onChange={e => setPagamentoData({...pagamentoData, valor_pago: e.target.value})} 
-                    placeholder="0.00" 
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Observações (Opcional)</label>
+                  <textarea 
+                    value={pagamentoData.observacoes} 
+                    onChange={e => setPagamentoData({...pagamentoData, observacoes: e.target.value})} 
+                    placeholder="Detalhes adicionais..." 
+                    rows="2"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
                   />
                 </div>

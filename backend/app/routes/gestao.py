@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException, status as http_status
 from ..models.gestao import (
     EmpreiteiroBase, EmpreiteiroUpdate, EmpreiteiroResponse, 
-    ContratoEmpreiteiroBase
+    ContratoEmpreiteiroBase, PagamentoTerceiroCreate
 )
 from ..middleware.auth import get_current_user
 from ..db.client import get_supabase_client
@@ -15,11 +15,7 @@ logger = logging.getLogger("edifica.gestao")
 
 router = APIRouter(prefix="/gestao", tags=["Gestão de Empreiteiros"])
 
-class MedicaoCreate(BaseModel):
-    contrato_id: UUID
-    data_medicao: str
-    quantidade_executada: float
-    preco_unitario: float
+
 
 @router.get("/empreiteiros", response_model=List[dict])
 async def list_empreiteiros(busca: Optional[str] = Query(None), user: dict = Depends(get_current_user)):
@@ -155,15 +151,48 @@ async def create_contrato(contrato: ContratoEmpreiteiroBase, user: dict = Depend
     res = supabase.table("contratos_empreiteiro").insert(data).execute()
     return res.data[0]
 
-@router.post("/medicoes", response_model=dict)
-async def create_medicao(med: MedicaoCreate, user: dict = Depends(get_current_user)):
+@router.post("/pagamentos", response_model=dict)
+async def create_pagamento(pag: PagamentoTerceiroCreate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
-    data = med.model_dump()
-    data["created_by"] = None if user.get("is_mock") else user.get("id")
-    data["contrato_id"] = str(data["contrato_id"])
-    data["valor_pagar"] = data["quantidade_executada"] * data["preco_unitario"]
+    data = pag.model_dump()
+    db_data = {
+        "created_by": None if user.get("is_mock") else user.get("id"),
+        "contrato_id": str(data["contrato_id"]),
+        "data_medicao": data["data_pagamento"],
+        "valor_pagar": data["valor_pago"],
+        "tipo_pagamento": data["tipo_pagamento"],
+        "anexo_url": data["anexo_url"],
+        "observacoes": data["observacoes"]
+    }
     
-    res = supabase.table("medicoes_empreiteiro").insert(data).execute()
+    res = supabase.table("medicoes_empreiteiro").insert(db_data).execute()
     return res.data[0]
+
+@router.patch("/contratos/{id}/status", response_model=dict)
+async def update_contrato_status(id: UUID, status_data: dict, user: dict = Depends(get_current_user)):
+    supabase = get_supabase_client()
+    status = status_data.get("status")
+    arquivado = status_data.get("arquivado")
+    
+    update_data = {}
+    if status is not None: update_data["status"] = status
+    if arquivado is not None: update_data["arquivado"] = arquivado
+    
+    res = supabase.table("contratos_empreiteiro").update(update_data).eq("id", str(id)).execute()
+    if res.data:
+        return res.data[0]
+    raise HTTPException(status_code=404, detail="Contrato não encontrado")
+
+@router.delete("/contratos/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
+async def delete_contrato(id: UUID, user: dict = Depends(get_current_user)):
+    supabase = get_supabase_client()
+    res = supabase.table("contratos_empreiteiro").delete().eq("id", str(id)).execute()
+    return None
+
+@router.delete("/pagamentos/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
+async def delete_pagamento(id: UUID, user: dict = Depends(get_current_user)):
+    supabase = get_supabase_client()
+    supabase.table("medicoes_empreiteiro").delete().eq("id", str(id)).execute()
+    return None

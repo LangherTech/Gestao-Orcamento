@@ -1,7 +1,21 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 from uuid import UUID
+
+class ProfissaoBase(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+
+class ProfissaoCreate(ProfissaoBase):
+    pass
+
+class ProfissaoUpdate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=255)
+
+class ProfissaoResponse(ProfissaoBase):
+    id: UUID
+    created_at: Optional[datetime] = None
+    total_funcionarios: Optional[int] = 0
 
 class FuncionarioBase(BaseModel):
     nome: str = Field(..., max_length=255)
@@ -14,6 +28,7 @@ class FuncionarioBase(BaseModel):
     cor: Optional[str] = None
     equipe_padrao_id: Optional[UUID] = None
     valor_diaria: Optional[float] = None
+    profissoes_ids: Optional[List[UUID]] = None
 
 class FuncionarioUpdate(BaseModel):
     nome: Optional[str] = None
@@ -26,6 +41,7 @@ class FuncionarioUpdate(BaseModel):
     cor: Optional[str] = None
     equipe_padrao_id: Optional[UUID] = None
     valor_diaria: Optional[float] = None
+    profissoes_ids: Optional[List[UUID]] = None
 
 class FuncionarioResponse(FuncionarioBase):
     id: UUID
@@ -73,5 +89,18 @@ class PagamentoFuncionarioBase(BaseModel):
     valor_pago: float
 
 class PagamentoFuncionarioResponse(PagamentoFuncionarioBase):
+    id: UUID
+    created_at: Optional[datetime] = None
+
+class FaltaBase(BaseModel):
+    funcionario_id: UUID
+    obra_id: Optional[UUID] = None
+    data: date
+    motivo: Optional[str] = None
+
+class FaltaCreate(FaltaBase):
+    pass
+
+class FaltaResponse(FaltaBase):
     id: UUID
     created_at: Optional[datetime] = None
