@@ -10,8 +10,7 @@ import {
   Users2,
   DollarSign,
   FileText,
-  ChevronRight,
-  History
+  ChevronRight
 } from 'lucide-react';
 
 export const navigationItems = [
@@ -25,7 +24,6 @@ export const navigationItems = [
   { id: 'calendario', label: 'Equipe & Calendário', icon: Users2 },
   { id: 'visitas', label: 'Visitas & Prospecção', icon: Building2 }, // Using Building2 or MapPin (not imported)
   { id: 'financeiro', label: 'Financeiro & Caixa', icon: DollarSign },
-  { id: 'rastreabilidade', label: 'Rastreabilidade', icon: History },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {

@@ -16,7 +16,6 @@ const CalendarioPage = lazy(() => import('./pages/CalendarioPage'));
 const FinanceiroPage = lazy(() => import('./pages/FinanceiroPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VisitasPage = lazy(() => import('./pages/VisitasPage'));
-const RastreabilidadePage = lazy(() => import('./pages/RastreabilidadePage'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -234,7 +233,6 @@ export default function App() {
                 />
               )}
               {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
-              {activeTab === 'rastreabilidade' && <RastreabilidadePage />}
             </Suspense>
           </div>
         </main>
