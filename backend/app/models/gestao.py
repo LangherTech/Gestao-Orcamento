@@ -5,11 +5,21 @@ from uuid import UUID
 
 class EmpreiteiroBase(BaseModel):
     nome: str = Field(..., max_length=255)
-    cpf_cnpj: Optional[str] = Field(None, max_length=14)
-    telefone: Optional[str] = Field(None, max_length=20)
+    cpf_cnpj: Optional[str] = Field(None, max_length=30)
+    telefone: Optional[str] = Field(None, max_length=50)
     email: Optional[str] = Field(None, max_length=255)
     area_atuacao: Optional[str] = Field(None, max_length=100)
+    endereco: Optional[str] = None
     ativo: bool = True
+
+class EmpreiteiroUpdate(BaseModel):
+    nome: Optional[str] = None
+    cpf_cnpj: Optional[str] = None
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+    area_atuacao: Optional[str] = None
+    endereco: Optional[str] = None
+    ativo: Optional[bool] = None
 
 class EmpreiteiroResponse(EmpreiteiroBase):
     id: UUID

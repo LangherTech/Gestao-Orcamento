@@ -66,11 +66,18 @@ async def list_obras(
     res = query.order("created_at", desc=True).execute()
     return res.data or []
 
+import logging
+
+logger = logging.getLogger("edifica.obras")
+
 @router.post("", response_model=dict, status_code=http_status.HTTP_201_CREATED)
 async def create_obra(obra: ObraCreate, user: dict = Depends(get_current_user)):
     """Cadastra uma nova obra."""
     supabase = get_supabase_client()
-    data = obra.model_dump()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection unavailable")
+
+    data = obra.model_dump(mode="json")
     
     # Validação do status: obra iniciada só pode ser ativa ou concluida
     if data.get("status") not in ("ativa", "concluida"):
@@ -92,17 +99,25 @@ async def create_obra(obra: ObraCreate, user: dict = Depends(get_current_user)):
         data["orcamento_empreiteiros"] = round(total * 0.40, 2)
         data["orcamento_caixa"] = round(total * 0.05, 2)
         
-    if supabase:
+    try:
         res = supabase.table("obras").insert(data).execute()
         if res.data:
             return res.data[0]
-    raise HTTPException(status_code=500, detail="Database connection unavailable")
+        raise HTTPException(status_code=400, detail="Erro ao inserir obra: retorno vazio")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao criar obra: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar a obra: {str(e)}")
 
 @router.put("/{id}", response_model=dict)
 async def update_obra(id: UUID, obra_update: ObraUpdate, user: dict = Depends(get_current_user)):
     """Atualiza dados e orçamentos de uma obra."""
     supabase = get_supabase_client()
-    update_data = {k: v for k, v in obra_update.model_dump().items() if v is not None}
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection unavailable")
+
+    update_data = {k: v for k, v in obra_update.model_dump(mode="json").items() if v is not None}
     
     if "status" in update_data:
         st = update_data["status"].lower().strip()
@@ -116,12 +131,16 @@ async def update_obra(id: UUID, obra_update: ObraUpdate, user: dict = Depends(ge
 
     update_data["updated_at"] = datetime.utcnow().isoformat()
 
-    if supabase:
+    try:
         res = supabase.table("obras").update(update_data).eq("id", str(id)).execute()
         if res.data:
             return res.data[0]
         raise HTTPException(status_code=404, detail="Obra não encontrada")
-    raise HTTPException(status_code=500, detail="Database connection unavailable")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao atualizar obra {id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar obra: {str(e)}")
 
 @router.patch("/{id}/status", response_model=dict)
 async def update_obra_status(id: UUID, payload: ObraStatusUpdate, user: dict = Depends(get_current_user)):

@@ -143,7 +143,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
         <style>
           @page {
             size: A4 portrait;
-            margin: 16mm 18mm 16mm 18mm;
+            margin: 10mm 15mm 10mm 15mm;
           }
           * {
             box-sizing: border-box;
@@ -414,10 +414,11 @@ export function PropostaComercialPreviewModal({
   onBackToEdit,
   readOnlyView = false,
   onSave = null,
-  saving = false
+  saving = false,
+  modoVisualizacao = 'resumido',
+  onModoVisualizacaoChange
 }) {
   const [currentPage, setCurrentPage] = useState(1); // 1, 2, 3 ou 0 (todos)
-  const [modoVisualizacao, setModoVisualizacao] = useState('resumido'); // 'resumido' ou 'detalhado'
 
   const {
     clienteNome = '',
@@ -493,13 +494,13 @@ export function PropostaComercialPreviewModal({
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-900 border border-slate-700 rounded-xl p-1 mr-2 text-xs">
             <button
-              onClick={() => setModoVisualizacao('resumido')}
+              onClick={() => onModoVisualizacaoChange && onModoVisualizacaoChange('resumido')}
               className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'resumido' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
             >
               Resumido
             </button>
             <button
-              onClick={() => setModoVisualizacao('detalhado')}
+              onClick={() => onModoVisualizacaoChange && onModoVisualizacaoChange('detalhado')}
               className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'detalhado' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
             >
               Detalhado

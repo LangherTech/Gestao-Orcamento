@@ -140,6 +140,8 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
     realizado_materiais = 0.0
     realizado_empreiteiros = 0.0
     realizado_caixa = 0.0
+    realizado_funcionarios = 0.0
+    orcado_funcionarios = 0.0
 
     if obras_ids:
         # Caixa Pequeno
@@ -180,6 +182,15 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "pct": calc_pct(realizado_empreiteiros, orcado_empreiteiros),
             "cor": "bg-amber-500",
             "excedeu": realizado_empreiteiros > orcado_empreiteiros if orcado_empreiteiros > 0 else False
+        },
+        {
+            "id": "funcionarios",
+            "categoria": "Mão de Obra Própria (Funcionários)",
+            "realizado": round(realizado_funcionarios, 2),
+            "orcado": round(orcado_funcionarios, 2),
+            "pct": calc_pct(realizado_funcionarios, orcado_funcionarios),
+            "cor": "bg-purple-500",
+            "excedeu": realizado_funcionarios > orcado_funcionarios if orcado_funcionarios > 0 else False
         },
         {
             "id": "caixa",

@@ -96,4 +96,29 @@ async def update_pedido_status(id: UUID, status: str = Query(...), user: dict = 
     
     data = {"status": status, "updated_at": datetime.now().isoformat()}
     res = supabase.table("pedidos_compra").update(data).eq("id", str(id)).execute()
-    return res.data[0]
+    pedido = res.data[0]
+
+    # Integração automática com o Financeiro (Caixa Pequeno) quando PAGO
+    if status == "pago":
+        # Verificar se já existe um lançamento para este pedido
+        ref_id = f"compra_{id}"
+        existente = supabase.table("caixa_pequeno").select("id").eq("referencia_id", ref_id).execute()
+        
+        if not existente.data:
+            # Buscar nome do fornecedor para a descrição
+            forn_res = supabase.table("fornecedores").select("nome").eq("id", pedido["fornecedor_id"]).execute()
+            fornecedor_nome = forn_res.data[0]["nome"] if forn_res.data else "Fornecedor"
+            
+            despesa = {
+                "obra_id": pedido["obra_id"],
+                "tipo": "saida",
+                "valor": float(pedido["valor_total"]),
+                "descricao": f"Pagamento Fornecedor ({fornecedor_nome}) - Pedido {pedido['numero']}",
+                "categoria": "Materiais e Insumos",
+                "data_movimento": datetime.now().isoformat(),
+                "referencia_id": ref_id,
+                "created_by": None if user.get("is_mock") else user.get("id")
+            }
+            supabase.table("caixa_pequeno").insert(despesa).execute()
+            
+    return pedido

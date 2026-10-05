@@ -1,36 +1,107 @@
-import React, { useState, useEffect } from 'react';
-import { Users2, Plus, Calendar, Clock, HardHat, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Users2, Plus, Calendar, Clock, HardHat, X, Search, Phone, Mail, 
+  CreditCard, Pencil, Trash2, Filter, CheckCircle, AlertCircle, 
+  Building2, Briefcase, MessageCircle, UserCheck, UserX
+} from 'lucide-react';
 import api from '../services/api';
+import { formatTelefone, formatCPF } from '../utils/masks';
 
-export default function CalendarioPage({ obras = [] }) {
+export default function CalendarioPage({ obras = [], user }) {
+  const [activeTab, setActiveTab] = useState('funcionarios'); // 'funcionarios' | 'alocacoes' | 'visao_mensal'
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [funcionarios, setFuncionarios] = useState([]);
   const [alocacoes, setAlocacoes] = useState([]);
+  const [equipes, setEquipes] = useState([]);
+  const [pagamentos, setPagamentos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
-  // Modal State
+  // Filtros
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCargo, setSelectedCargo] = useState('todos');
+  const [filtroObra, setFiltroObra] = useState('todas');
+  const [filtroPeriodo, setFiltroPeriodo] = useState('todos');
+
+  // Modais de Cadastro / Edição
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState('funcionario'); // 'funcionario' ou 'alocacao'
-  const [formData, setFormData] = useState({
+  const [modalType, setModalType] = useState('funcionario'); // 'funcionario' | 'alocacao'
+  const [editingFuncionario, setEditingFuncionario] = useState(null);
+
+  // Modais de Exclusão
+  const [isDeleteFuncModalOpen, setIsDeleteFuncModalOpen] = useState(false);
+  const [deletingFuncionario, setDeletingFuncionario] = useState(null);
+  const [isDeleteAlocModalOpen, setIsDeleteAlocModalOpen] = useState(false);
+  const [deletingAlocacao, setDeletingAlocacao] = useState(null);
+
+  // Estados de formulário
+  const initialFuncForm = {
     nome: '',
-    ativo: true,
+    cargo: '',
+    telefone: '',
+    cpf: '',
+    email: '',
+    lider: false,
+    cor: '',
+    equipe_padrao_id: '',
+    valor_diaria: '',
+    ativo: true
+  };
+  const [funcForm, setFuncForm] = useState(initialFuncForm);
+
+  const initialAlocForm = {
     obra_id: '',
     funcionario_id: '',
-    data_inicio: '',
-    data_fim: '',
-    periodo: 'dia_inteiro'
-  });
+    data_inicio: new Date().toISOString().split('T')[0],
+    data_fim: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    periodo: 'dia_inteiro',
+    modalidade_pagamento: 'diaria',
+    valor_diaria: '',
+    valor_fechado: ''
+  };
+  const [alocForm, setAlocForm] = useState(initialAlocForm);
+
+  const initialEquipeForm = {
+    nome: '',
+    lider_id: ''
+  };
+  const [equipeForm, setEquipeForm] = useState(initialEquipeForm);
+
+  const initialPagamentoForm = {
+    funcionario_id: '',
+    obra_id: '',
+    alocacao_id: '',
+    modalidade: 'diaria',
+    data_pagamento: new Date().toISOString().split('T')[0],
+    valor_pago: ''
+  };
+  const [pagamentoForm, setPagamentoForm] = useState(initialPagamentoForm);
+
+  const showToast = (message, type = 'success') => {
+    let finalMessage = message;
+    if (Array.isArray(message)) {
+      finalMessage = message.map(m => m?.msg || JSON.stringify(m)).join(', ');
+    }
+    setToast({ message: finalMessage, type });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [funcRes, alocRes] = await Promise.all([
+      const [funcRes, alocRes, equipesRes, pagRes] = await Promise.all([
         api.get('/calendario/funcionarios'),
-        api.get('/calendario/alocacoes')
+        api.get('/calendario/alocacoes'),
+        api.get('/calendario/equipes'),
+        api.get('/calendario/pagamentos')
       ]);
       if (funcRes.data) setFuncionarios(funcRes.data);
       if (alocRes.data) setAlocacoes(alocRes.data);
+      if (equipesRes.data) setEquipes(equipesRes.data);
+      if (pagRes.data) setPagamentos(pagRes.data);
     } catch (err) {
       console.error('Erro ao carregar dados do calendário:', err);
+      showToast('Erro ao carregar dados de equipe e alocações.', 'error');
     } finally {
       setLoading(false);
     }
@@ -40,207 +111,1516 @@ export default function CalendarioPage({ obras = [] }) {
     fetchData();
   }, []);
 
-  const handleSubmit = async (e) => {
+  // Abrir modal novo funcionário
+  const handleOpenNewFuncionario = () => {
+    setEditingFuncionario(null);
+    setFuncForm(initialFuncForm);
+    setModalType('funcionario');
+    setShowModal(true);
+  };
+
+  // Abrir modal editar funcionário
+  const handleOpenEditFuncionario = (func) => {
+    setEditingFuncionario(func);
+    setFuncForm({
+      nome: func.nome || '',
+      cargo: func.cargo || '',
+      telefone: func.telefone ? formatTelefone(func.telefone) : '',
+      cpf: func.cpf ? formatCPF(func.cpf) : '',
+      email: func.email || '',
+      ativo: func.ativo !== false
+    });
+    setModalType('funcionario');
+    setShowModal(true);
+  };
+
+  // Abrir modal nova alocação pré-selecionando funcionário
+  const handleOpenAlocacaoForFuncionario = (funcionarioId) => {
+    setAlocForm({
+      ...initialAlocForm,
+      funcionario_id: funcionarioId,
+      obra_id: obras && obras.length > 0 ? obras[0].id : ''
+    });
+    setModalType('alocacao');
+    setShowModal(true);
+  };
+
+  // Salvar funcionário
+  const handleSaveFuncionario = async (e) => {
     e.preventDefault();
     try {
-      if (modalType === 'funcionario') {
-        await api.post('/calendario/funcionarios', {
-          nome: formData.nome,
-          ativo: formData.ativo
-        });
+      const payload = { ...funcForm };
+      // Clean up empty strings for optional fields
+      if (!payload.equipe_padrao_id) delete payload.equipe_padrao_id;
+      if (!payload.valor_diaria) delete payload.valor_diaria;
+      if (!payload.cor) delete payload.cor;
+      if (!payload.cargo) delete payload.cargo;
+      if (!payload.telefone) delete payload.telefone;
+      if (!payload.cpf) delete payload.cpf;
+      if (!payload.email) delete payload.email;
+
+      if (editingFuncionario) {
+        await api.put(`/calendario/funcionarios/${editingFuncionario.id}`, payload);
+        showToast(`Colaborador "${payload.nome}" atualizado com sucesso!`);
       } else {
-        await api.post('/calendario/alocacoes', {
-          obra_id: formData.obra_id,
-          funcionario_id: formData.funcionario_id,
-          data_inicio: formData.data_inicio,
-          data_fim: formData.data_fim,
-          periodo: formData.periodo
-        });
+        await api.post('/calendario/funcionarios', payload);
+        showToast(`Colaborador "${payload.nome}" cadastrado com sucesso!`);
       }
       setShowModal(false);
+      setEditingFuncionario(null);
+      setFuncForm(initialFuncForm);
       fetchData();
     } catch (err) {
-      console.error('Erro ao salvar:', err);
-      alert('Erro ao salvar os dados.');
+      console.error('Erro ao salvar funcionário:', err);
+      let detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(d => d.msg).join(', ');
+      }
+      showToast(detail || 'Erro ao salvar colaborador.', 'error');
+    }
+  };
+
+  // Confirmar exclusão de funcionário
+  const handleConfirmDeleteFuncionario = async () => {
+    if (!deletingFuncionario) return;
+    try {
+      await api.delete(`/calendario/funcionarios/${deletingFuncionario.id}`);
+      showToast(`Colaborador "${deletingFuncionario.nome}" removido com sucesso.`);
+      setIsDeleteFuncModalOpen(false);
+      setDeletingFuncionario(null);
+      fetchData();
+    } catch (err) {
+      console.error('Erro ao excluir funcionário:', err);
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Erro ao excluir colaborador.', 'error');
+    }
+  };
+
+  // Salvar alocação
+  const handleSaveAlocacao = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/calendario/alocacoes', alocForm);
+      showToast('Alocação registrada com sucesso!');
+      setShowModal(false);
+      setAlocForm(initialAlocForm);
+      fetchData();
+    } catch (err) {
+      console.error('Erro ao salvar alocação:', err);
+      const detail = err?.response?.data?.detail;
+      showToast(detail || 'Erro ao registrar alocação.', 'error');
+    }
+  };
+
+  const handleSaveEquipe = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/calendario/equipes', equipeForm);
+      showToast('Equipe registrada com sucesso!');
+      setShowModal(false);
+      setEquipeForm(initialEquipeForm);
+      fetchData();
+    } catch (err) {
+      console.error('Erro ao salvar equipe:', err);
+      showToast('Erro ao registrar equipe.', 'error');
+    }
+  };
+
+  const handleSavePagamento = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/calendario/pagamentos', pagamentoForm);
+      showToast('Pagamento registrado com sucesso!');
+      setShowModal(false);
+      setPagamentoForm(initialPagamentoForm);
+      fetchData();
+    } catch (err) {
+      console.error('Erro ao salvar pagamento:', err);
+      showToast('Erro ao registrar pagamento.', 'error');
+    }
+  };
+
+  const handleConfirmDeleteEquipe = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta equipe?')) return;
+    try {
+      await api.delete(`/calendario/equipes/${id}`);
+      showToast('Equipe removida com sucesso.');
+      fetchData();
+    } catch (err) {
+      showToast('Erro ao excluir equipe.', 'error');
+    }
+  };
+
+  const handleConfirmDeletePagamento = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir este pagamento?')) return;
+    try {
+      await api.delete(`/calendario/pagamentos/${id}`);
+      showToast('Pagamento removido com sucesso.');
+      fetchData();
+    } catch (err) {
+      showToast('Erro ao excluir pagamento.', 'error');
+    }
+  };
+
+  // Confirmar exclusão de alocação
+  const handleConfirmDeleteAlocacao = async () => {
+    if (!deletingAlocacao) return;
+    try {
+      await api.delete(`/calendario/alocacoes/${deletingAlocacao.id}`);
+      showToast('Alocação removida com sucesso.');
+      setIsDeleteAlocModalOpen(false);
+      setDeletingAlocacao(null);
+      fetchData();
+    } catch (err) {
+      console.error('Erro ao remover alocação:', err);
+      showToast('Erro ao remover alocação.', 'error');
+    }
+  };
+
+  // Lista de cargos únicos para filtro
+  const cargosDisponiveis = useMemo(() => {
+    const setCargos = new Set();
+    funcionarios.forEach(f => {
+      if (f.cargo && f.cargo.trim()) {
+        setCargos.add(f.cargo.trim());
+      }
+    });
+    return Array.from(setCargos).sort();
+  }, [funcionarios]);
+
+  // Funcionários filtrados
+  const funcionariosFiltrados = useMemo(() => {
+    return funcionarios.filter(f => {
+      const term = searchTerm.toLowerCase().trim();
+      const matchSearch = !term || (
+        (f.nome && f.nome.toLowerCase().includes(term)) ||
+        (f.cargo && f.cargo.toLowerCase().includes(term)) ||
+        (f.telefone && f.telefone.toLowerCase().includes(term)) ||
+        (f.cpf && f.cpf.toLowerCase().includes(term)) ||
+        (f.email && f.email.toLowerCase().includes(term))
+      );
+
+      const matchCargo = selectedCargo === 'todos' || (f.cargo && f.cargo.toLowerCase() === selectedCargo.toLowerCase());
+
+      return matchSearch && matchCargo;
+    });
+  }, [funcionarios, searchTerm, selectedCargo]);
+
+  // Alocações filtradas
+  const alocacoesFiltradas = useMemo(() => {
+    return alocacoes.filter(a => {
+      const matchObra = filtroObra === 'todas' || String(a.obra_id) === String(filtroObra);
+      const matchPeriodo = filtroPeriodo === 'todos' || a.periodo === filtroPeriodo;
+      return matchObra && matchPeriodo;
+    });
+  }, [alocacoes, filtroObra, filtroPeriodo]);
+
+  // Estatísticas gerais
+  const stats = useMemo(() => {
+    const totalFuncionarios = funcionarios.length;
+    const funcionariosAtivos = funcionarios.filter(f => f.ativo !== false).length;
+    const alocadosHoje = funcionarios.filter(f => f.alocacao_atual && f.alocacao_atual.em_andamento).length;
+    const disponiveisHoje = Math.max(0, funcionariosAtivos - alocadosHoje);
+    const obrasComEquipe = new Set(alocacoes.map(a => a.obra_id)).size;
+
+    return {
+      totalFuncionarios,
+      funcionariosAtivos,
+      alocadosHoje,
+      disponiveisHoje,
+      obrasComEquipe
+    };
+  }, [funcionarios, alocacoes]);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateStr;
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce-short ${
+          toast.type === 'error' 
+            ? 'bg-rose-950/90 border-rose-800 text-rose-200' 
+            : 'bg-emerald-950/90 border-emerald-800 text-emerald-200'
+        }`}>
+          {toast.type === 'error' ? <AlertCircle className="w-5 h-5 text-rose-400" /> : <CheckCircle className="w-5 h-5 text-emerald-400" />}
+          <span className="text-sm font-medium">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Header Principal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Equipe & Alocações</h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Gestão de colaboradores próprios (CLT) e alocações por obra com divisão por turnos.
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              Equipe Própria & Escalas
+            </span>
+          </div>
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Users2 className="w-7 h-7 text-blue-400" />
+            Equipe & Alocações
+          </h2>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Cadastro de colaboradores próprios (CLT) e alocações nas obras por turno.
           </p>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex items-center gap-3 flex-wrap">
           <button 
-            onClick={() => { setModalType('funcionario'); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border border-slate-700"
-          >
-            <Users2 className="w-4 h-4" />
-            <span>Novo Funcionário</span>
-          </button>
-          <button 
-            onClick={() => { setModalType('alocacao'); setShowModal(true); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
+            onClick={handleOpenNewFuncionario}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Alocar Equipe</span>
+            <span>Novo Colaborador</span>
+          </button>
+
+          <button 
+            onClick={() => {
+              setAlocForm({
+                ...initialAlocForm,
+                funcionario_id: funcionarios.length > 0 ? funcionarios[0].id : '',
+                obra_id: obras.length > 0 ? obras[0].id : ''
+              });
+              setModalType('alocacao');
+              setShowModal(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Alocar em Obra</span>
           </button>
         </div>
       </div>
 
-      {loading ? (
-         <div className="flex justify-center p-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div></div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {alocacoes.map((aloc) => (
-            <div key={aloc.id} className="glass-card p-5 rounded-2xl flex items-center justify-between border border-slate-800/60 bg-slate-900/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-sm">
-                  {aloc.funcionario_nome.split(' ').map((n, idx) => idx < 2 ? n[0] : '').join('')}
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-white">{aloc.funcionario_nome}</h4>
-                  <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                    <Calendar className="w-3 h-3" /> {new Date(aloc.data_inicio).toLocaleDateString('pt-BR')} até {new Date(aloc.data_fim).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-              </div>
+      {/* KPIs / Cards de Resumo */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+            <span>Total de Colaboradores</span>
+            <Users2 className="w-4 h-4 text-blue-400" />
+          </div>
+          <div>
+            <span className="text-2xl font-bold text-white tracking-tight">{stats.totalFuncionarios}</span>
+            <span className="text-xs text-slate-400 block mt-0.5">{stats.funcionariosAtivos} ativos no quadro</span>
+          </div>
+        </div>
 
-              <div className="text-right">
-                <span className="text-xs font-semibold text-emerald-400 block">{aloc.obra}</span>
-                <span className="text-[11px] text-slate-400 font-medium capitalize mt-1 block bg-slate-800 px-2 py-0.5 rounded-full inline-block">
-                  {aloc.periodo.replace('_', ' ')}
-                </span>
-              </div>
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+            <span>Alocados em Campo</span>
+            <UserCheck className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div>
+            <span className="text-2xl font-bold text-emerald-400 tracking-tight">{stats.alocadosHoje}</span>
+            <span className="text-xs text-slate-400 block mt-0.5">com escala ativa hoje</span>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+            <span>Disponíveis / Sem Obra</span>
+            <UserX className="w-4 h-4 text-amber-400" />
+          </div>
+          <div>
+            <span className="text-2xl font-bold text-white tracking-tight">{stats.disponiveisHoje}</span>
+            <span className="text-xs text-slate-400 block mt-0.5">prontos para alocação</span>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
+            <span>Obras com Equipe</span>
+            <Building2 className="w-4 h-4 text-purple-400" />
+          </div>
+          <div>
+            <span className="text-2xl font-bold text-purple-400 tracking-tight">{stats.obrasComEquipe}</span>
+            <span className="text-xs text-slate-400 block mt-0.5">canteiros com escalas</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Navegação por Abas */}
+      <div className="border-b border-slate-800 flex items-center gap-6">
+        <button
+          onClick={() => setActiveTab('funcionarios')}
+          className={`flex items-center gap-2.5 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'funcionarios'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Users2 className="w-4 h-4" />
+          <span>Colaboradores & Equipe</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300 font-normal">
+            {funcionarios.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('alocacoes')}
+          className={`flex items-center gap-2.5 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'alocacoes'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Lista de Alocações</span>
+          <span className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300 font-normal">
+            {alocacoes.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('visao_mensal')}
+          className={`flex items-center gap-2.5 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'visao_mensal'
+              ? 'border-purple-500 text-purple-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>Visão Mensal (Grade)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('equipes')}
+          className={`flex items-center gap-2.5 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'equipes'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Briefcase className="w-4 h-4" />
+          <span>Equipes Base</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('pagamentos')}
+          className={`flex items-center gap-2.5 pb-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
+            activeTab === 'pagamentos'
+              ? 'border-rose-500 text-rose-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Lançar Pagamentos</span>
+        </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* ABA 1: LISTAGEM DE COLABORADORES                         */}
+      {/* ======================================================== */}
+      {activeTab === 'funcionarios' && (
+        <div className="space-y-4">
+          {/* Barra de Filtros e Busca */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Buscar colaborador por nome, cargo, telefone ou CPF..."
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')} 
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-          ))}
-          {alocacoes.length === 0 && (
-            <div className="col-span-1 md:col-span-2 text-center py-10 text-slate-500">
-              Nenhuma alocação registrada no momento.
+
+            {/* Filtro por Cargo */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={selectedCargo}
+                onChange={e => setSelectedCargo(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="todos">Todos os Cargos</option>
+                {cargosDisponiveis.map(cargo => (
+                  <option key={cargo} value={cargo}>{cargo}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Grid de Cards de Funcionários */}
+          {loading ? (
+            <div className="text-slate-400 py-16 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400 mb-2"></div>
+              <p className="text-sm">Carregando equipe...</p>
+            </div>
+          ) : funcionariosFiltrados.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800 border-dashed rounded-2xl p-12 text-center space-y-4">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400">
+                <Users2 className="w-7 h-7 text-blue-400/70" />
+              </div>
+              <div className="max-w-md mx-auto">
+                <h3 className="text-base font-semibold text-white">Nenhum colaborador encontrado</h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  {searchTerm || selectedCargo !== 'todos'
+                    ? 'Nenhum funcionário corresponde aos filtros de busca aplicados.'
+                    : 'Cadastre os membros da sua equipe própria para gerenciar alocações nas obras.'}
+                </p>
+              </div>
+              <button
+                onClick={handleOpenNewFuncionario}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Cadastrar Primeiro Colaborador</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {funcionariosFiltrados.map((func) => {
+                const cleanPhone = func.telefone ? func.telefone.replace(/\D/g, '') : '';
+                const whatsappUrl = cleanPhone ? `https://wa.me/55${cleanPhone}` : null;
+                const initials = (func.nome || 'F')
+                  .split(' ')
+                  .map(n => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase();
+
+                const alocAtual = func.alocacao_atual;
+
+                return (
+                  <div 
+                    key={func.id}
+                    className="bg-slate-900/70 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 flex flex-col justify-between transition-all group shadow-sm hover:shadow-md"
+                  >
+                    <div>
+                      {/* Topo do Card */}
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-sm tracking-wider">
+                            {initials}
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-white group-hover:text-blue-300 transition-colors leading-tight">
+                              {func.nome}
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                {func.cargo || 'Operacional'}
+                              </span>
+                              {func.ativo === false ? (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-800 text-slate-400">
+                                  Inativo
+                                </span>
+                              ) : (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-500/10 text-emerald-400">
+                                  Ativo
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Botões de Ação */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleOpenEditFuncionario(func)}
+                            title="Editar Colaborador"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all cursor-pointer"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeletingFuncionario(func);
+                              setIsDeleteFuncModalOpen(true);
+                            }}
+                            title="Excluir Colaborador"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Informações de Contato */}
+                      <div className="space-y-1.5 text-xs text-slate-300 py-3 border-t border-slate-800/80 my-3">
+                        {func.telefone ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-2 text-slate-400">
+                              <Phone className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{func.telefone}</span>
+                            </span>
+                            {whatsappUrl && (
+                              <a
+                                href={whatsappUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all"
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                <span>WhatsApp</span>
+                              </a>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <Phone className="w-3.5 h-3.5" />
+                            <span>Sem telefone cadastrado</span>
+                          </div>
+                        )}
+
+                        {func.cpf && (
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                            <span>CPF: {func.cpf}</span>
+                          </div>
+                        )}
+
+                        {func.email && (
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Mail className="w-3.5 h-3.5 text-slate-500" />
+                            <span className="truncate">{func.email}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status de Alocação Atual */}
+                      <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Alocação Atual:
+                        </span>
+                        {alocAtual ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-emerald-400 flex items-center gap-1.5 truncate">
+                                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                <span className="truncate">{alocAtual.obra_nome}</span>
+                              </span>
+                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+                                {alocAtual.periodo === 'dia_inteiro' ? 'Dia Inteiro' : alocAtual.periodo === 'manha' ? 'Manhã' : 'Tarde'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-500" />
+                              <span>{formatDate(alocAtual.data_inicio)} até {formatDate(alocAtual.data_fim)}</span>
+                              {alocAtual.em_andamento && (
+                                <span className="ml-auto inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-500/20 text-emerald-300">
+                                  Hoje
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-slate-500 text-xs flex items-center gap-1.5 py-0.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-600" />
+                            <span>Disponível / Sem alocação ativa</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Botão de Rodapé para Alocar */}
+                    <div className="pt-4">
+                      <button
+                        onClick={() => handleOpenAlocacaoForFuncionario(func.id)}
+                        className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white transition-all cursor-pointer border border-slate-700/60"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Alocar {func.nome.split(' ')[0]} em Obra</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white">
-                {modalType === 'funcionario' ? 'Novo Funcionário' : 'Nova Alocação'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-4 space-y-4">
-              {modalType === 'funcionario' && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Nome Completo</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.nome}
-                    onChange={e => setFormData({...formData, nome: e.target.value})}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    placeholder="Ex: João da Silva"
-                  />
-                </div>
-              )}
-
-              {modalType === 'alocacao' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Funcionário</label>
-                    <select
-                      required
-                      value={formData.funcionario_id}
-                      onChange={e => setFormData({...formData, funcionario_id: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    >
-                      <option value="">Selecione um funcionário...</option>
-                      {funcionarios.map(f => (
-                        <option key={f.id} value={f.id}>{f.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Obra</label>
-                    <select
-                      required
-                      value={formData.obra_id}
-                      onChange={e => setFormData({...formData, obra_id: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                    >
-                      <option value="">Selecione uma obra...</option>
-                      {obras.map(o => (
-                        <option key={o.id} value={o.id}>{o.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">Data Início</label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.data_inicio}
-                        onChange={e => setFormData({...formData, data_inicio: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-400 mb-1">Data Fim</label>
-                      <input
-                        type="date"
-                        required
-                        value={formData.data_fim}
-                        onChange={e => setFormData({...formData, data_fim: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1">Turno</label>
-                    <select
-                      required
-                      value={formData.periodo}
-                      onChange={e => setFormData({...formData, periodo: e.target.value})}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white"
-                    >
-                      <option value="dia_inteiro">Dia Inteiro</option>
-                      <option value="manha">Manhã</option>
-                      <option value="tarde">Tarde</option>
-                    </select>
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-medium transition-colors"
+      {/* ======================================================== */}
+      {/* ABA 2: LISTAGEM DE ALOCAÇÕES & ESCALAS                   */}
+      {/* ======================================================== */}
+      {activeTab === 'alocacoes' && (
+        <div className="space-y-4">
+          {/* Filtros da Grade de Alocações */}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-slate-400" />
+                <label className="text-xs font-medium text-slate-400">Obra:</label>
+                <select
+                  value={filtroObra}
+                  onChange={e => setFiltroObra(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-colors"
-                >
-                  Salvar
-                </button>
+                  <option value="todas">Todas as Obras</option>
+                  {obras?.map(o => (
+                    <option key={o.id} value={o.id}>{o.nome}</option>
+                  ))}
+                </select>
               </div>
-            </form>
+
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-400" />
+                <label className="text-xs font-medium text-slate-400">Turno:</label>
+                <select
+                  value={filtroPeriodo}
+                  onChange={e => setFiltroPeriodo(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                >
+                  <option value="todos">Todos os Turnos</option>
+                  <option value="dia_inteiro">Dia Inteiro</option>
+                  <option value="manha">Manhã</option>
+                  <option value="tarde">Tarde</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setAlocForm({
+                  ...initialAlocForm,
+                  funcionario_id: funcionarios.length > 0 ? funcionarios[0].id : '',
+                  obra_id: obras.length > 0 ? obras[0].id : ''
+                });
+                setModalType('alocacao');
+                setShowModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white cursor-pointer shadow-lg transition-all"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nova Alocação</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {loading ? (
+              <div className="text-slate-400 py-10 col-span-2 text-center">Carregando alocações...</div>
+            ) : alocacoesFiltradas.length === 0 ? (
+              <div className="text-slate-500 py-12 col-span-2 text-center border border-slate-800 border-dashed rounded-2xl">
+                <Calendar className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-400">Nenhuma alocação encontrada.</p>
+                <p className="text-xs text-slate-500 mt-1">Aloque membros da equipe em obras para acompanhar as escalas.</p>
+              </div>
+            ) : (
+              alocacoesFiltradas.map((aloc) => (
+                <div 
+                  key={aloc.id} 
+                  className="bg-slate-900/70 border border-slate-800 hover:border-slate-700 p-5 rounded-2xl flex items-center justify-between transition-all shadow-sm group"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">
+                      {(aloc.funcionario_nome || 'F').split(' ').map((n, idx) => idx < 2 ? n[0] : '').join('')}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white group-hover:text-blue-300 transition-colors">
+                        {aloc.funcionario_nome}
+                      </h4>
+                      {aloc.funcionario_cargo && (
+                        <span className="text-[10px] text-slate-400 block">
+                          {aloc.funcionario_cargo}
+                        </span>
+                      )}
+                      <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" /> 
+                        <span>{formatDate(aloc.data_inicio)} até {formatDate(aloc.data_fim)}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-xs font-semibold text-emerald-400 flex items-center justify-end gap-1">
+                        <Building2 className="w-3 h-3" />
+                        <span>{aloc.obra}</span>
+                      </span>
+                      <span className="text-[10px] text-slate-300 font-medium capitalize mt-1 px-2 py-0.5 rounded-full inline-block bg-slate-800 border border-slate-700/60">
+                        {aloc.periodo === 'dia_inteiro' ? 'Dia Inteiro' : aloc.periodo === 'manha' ? 'Manhã' : 'Tarde'}
+                      </span>
+                      {aloc.created_by && (
+                        <span className="block mt-2 text-[9px] text-slate-500 text-right">
+                          Autorizado por {aloc.created_by === user?.id ? 'Você' : 'Guilherme/Sócio'}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setDeletingAlocacao(aloc);
+                        setIsDeleteAlocModalOpen(true);
+                      }}
+                      title="Remover Alocação"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-all cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
+
+      {/* ======================================================== */}
+      {/* ABA 3: VISÃO MENSAL (GRADE)                              */}
+      {/* ======================================================== */}
+      {activeTab === 'visao_mensal' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <button 
+              onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} 
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition-colors cursor-pointer"
+            >
+              Anterior
+            </button>
+            <h3 className="text-lg font-bold text-white capitalize">
+              {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            </h3>
+            <button 
+              onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} 
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition-colors cursor-pointer"
+            >
+              Próximo
+            </button>
+          </div>
+
+          <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/50">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+                <div key={d} className="p-3 text-center text-[11px] font-bold text-slate-400 uppercase tracking-wider border-r border-slate-800/50 last:border-0">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 auto-rows-fr">
+              {Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() }).map((_, b) => (
+                <div key={`blank-${b}`} className="min-h-[120px] p-2 border-b border-r border-slate-800/50 bg-slate-950/30"></div>
+              ))}
+              {Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate() }).map((_, idx) => {
+                const d = idx + 1;
+                const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                
+                // Pegamos da lista original de alocações (nao filtrada) para garantir que mostramos tudo
+                const dayAlocs = alocacoes.filter(a => a.data_inicio <= dateStr && a.data_fim >= dateStr);
+                const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                
+                const colors = ['bg-red-500/20 text-red-300 border-red-500/30', 'bg-blue-500/20 text-blue-300 border-blue-500/30', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', 'bg-amber-500/20 text-amber-300 border-amber-500/30', 'bg-purple-500/20 text-purple-300 border-purple-500/30', 'bg-pink-500/20 text-pink-300 border-pink-500/30', 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'];
+                const getColor = (name) => {
+                  let hash = 0;
+                  for (let i = 0; i < (name || '').length; i++) {
+                    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                  }
+                  return colors[Math.abs(hash) % colors.length];
+                };
+
+                return (
+                  <div key={d} className={`min-h-[120px] p-2 border-b border-r border-slate-800/50 hover:bg-slate-800/40 transition-colors ${isToday ? 'bg-emerald-950/20' : ''}`}>
+                    <div className={`text-xs font-semibold mb-2 inline-flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'text-slate-400'}`}>
+                      {d}
+                    </div>
+                    <div className="space-y-1.5 h-full max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
+                      {dayAlocs.map(a => (
+                        <div key={a.id} className={`px-2 py-1 text-[9px] leading-tight rounded border font-medium truncate shadow-sm cursor-help transition-all hover:brightness-110 ${getColor(a.funcionario_nome)}`} title={`${a.funcionario_nome} - ${a.obra} (${a.periodo})`}>
+                          <span className="font-bold">{a.funcionario_nome.split(' ')[0]}</span> <span className="opacity-75">em {a.obra}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ABA 4: LISTAGEM DE EQUIPES BASE                          */}
+      {/* ======================================================== */}
+      {activeTab === 'equipes' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-white">Equipes Cadastradas</h3>
+            <button
+              onClick={() => {
+                setEquipeForm(initialEquipeForm);
+                setModalType('equipe');
+                setShowModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nova Equipe</span>
+            </button>
+          </div>
+          {loading ? (
+            <div className="text-slate-400 py-8 text-center">Carregando equipes...</div>
+          ) : equipes.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800 border-dashed rounded-2xl p-12 text-center text-slate-400">
+              Nenhuma equipe cadastrada ainda.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {equipes.map(eq => (
+                <div key={eq.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-lg font-bold text-white mb-2">{eq.nome}</h4>
+                    <p className="text-sm text-slate-400">Líder: {eq.lider?.nome || 'Sem líder'}</p>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <button onClick={() => handleConfirmDeleteEquipe(eq.id)} className="text-rose-400 hover:text-rose-300 p-2 bg-rose-500/10 rounded-lg">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* ABA 5: LANÇAMENTO DE PAGAMENTOS                          */}
+      {/* ======================================================== */}
+      {activeTab === 'pagamentos' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-white">Lançamentos de Pagamento (Caixa Pequeno)</h3>
+            <button
+              onClick={() => {
+                setPagamentoForm(initialPagamentoForm);
+                setModalType('pagamento');
+                setShowModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-all"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Lançar Pagamento</span>
+            </button>
+          </div>
+          {loading ? (
+            <div className="text-slate-400 py-8 text-center">Carregando pagamentos...</div>
+          ) : pagamentos.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800 border-dashed rounded-2xl p-12 text-center text-slate-400">
+              Nenhum pagamento registrado.
+            </div>
+          ) : (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-slate-950/50 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4">Data</th>
+                    <th className="px-6 py-4">Funcionário</th>
+                    <th className="px-6 py-4">Modalidade</th>
+                    <th className="px-6 py-4">Valor Pago</th>
+                    <th className="px-6 py-4">Responsável</th>
+                    <th className="px-6 py-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {pagamentos.map(pag => (
+                    <tr key={pag.id} className="hover:bg-slate-800/20 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">{formatDate(pag.data_pagamento)}</td>
+                      <td className="px-6 py-4 font-medium text-white">{pag.funcionarios?.nome}</td>
+                      <td className="px-6 py-4 capitalize">{pag.modalidade}</td>
+                      <td className="px-6 py-4 text-emerald-400 font-semibold">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pag.valor_pago)}
+                      </td>
+                      <td className="px-6 py-4 text-[10px] text-slate-400">
+                        {pag.created_by ? (pag.created_by === user?.id ? 'Você' : 'Sócio') : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button onClick={() => handleConfirmDeletePagamento(pag.id)} className="text-rose-400 hover:text-rose-300 p-1.5 bg-rose-500/10 rounded-lg">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: NOVO / EDITAR FUNCIONÁRIO                         */}
+      {/* ======================================================== */}
+      {showModal && modalType === 'funcionario' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users2 className="w-5 h-5 text-blue-400" />
+                <h3 className="text-base font-bold text-white">
+                  {editingFuncionario ? `Editar Colaborador — ${editingFuncionario.nome}` : 'Cadastrar Novo Colaborador'}
+                </h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[75vh]">
+              <form id="func-form" onSubmit={handleSaveFuncionario} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: João da Silva"
+                    value={funcForm.nome}
+                    onChange={e => setFuncForm({...funcForm, nome: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Cargo / Função</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Mestre de Obras, Pedreiro..."
+                      value={funcForm.cargo}
+                      onChange={e => setFuncForm({...funcForm, cargo: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Telefone / WhatsApp</label>
+                    <input
+                      type="text"
+                      placeholder="(47) 99999-9999"
+                      value={funcForm.telefone}
+                      maxLength={15}
+                      onChange={e => setFuncForm({...funcForm, telefone: formatTelefone(e.target.value)})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">CPF</label>
+                    <input
+                      type="text"
+                      placeholder="000.000.000-00"
+                      value={funcForm.cpf}
+                      maxLength={14}
+                      onChange={e => setFuncForm({...funcForm, cpf: formatCPF(e.target.value)})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">E-mail</label>
+                    <input
+                      type="email"
+                      placeholder="joao@exemplo.com"
+                      value={funcForm.email}
+                      onChange={e => setFuncForm({...funcForm, email: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor da Diária (R$)</label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      value={funcForm.valor_diaria}
+                      onChange={e => setFuncForm({...funcForm, valor_diaria: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-col justify-center pt-5">
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={funcForm.lider}
+                        onChange={e => setFuncForm({...funcForm, lider: e.target.checked})}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <span>É Líder de Equipe?</span>
+                    </label>
+                  </div>
+                </div>
+
+                {funcForm.lider && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Cor no Calendário (Para Líderes)</label>
+                    <select
+                      value={funcForm.cor}
+                      onChange={e => setFuncForm({...funcForm, cor: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Selecione uma cor...</option>
+                      <option value="bg-blue-500">Azul</option>
+                      <option value="bg-emerald-500">Verde</option>
+                      <option value="bg-rose-500">Vermelho</option>
+                      <option value="bg-amber-500">Amarelo</option>
+                      <option value="bg-purple-500">Roxo</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={funcForm.ativo}
+                      onChange={e => setFuncForm({...funcForm, ativo: e.target.checked})}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span>Colaborador Ativo na Empresa</span>
+                  </label>
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="func-form"
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg transition-all"
+              >
+                {editingFuncionario ? 'Salvar Alterações' : 'Cadastrar Colaborador'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: NOVA ALOCAÇÃO                                     */}
+      {/* ======================================================== */}
+      {showModal && modalType === 'alocacao' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">Alocar Colaborador em Obra</h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <form id="aloc-form" onSubmit={handleSaveAlocacao} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Colaborador *</label>
+                  <select
+                    required
+                    value={alocForm.funcionario_id}
+                    onChange={e => setAlocForm({...alocForm, funcionario_id: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Selecione o colaborador...</option>
+                    {funcionarios.map(f => (
+                      <option key={f.id} value={f.id}>{f.nome} {f.cargo ? `(${f.cargo})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Obra de Destino *</label>
+                  <select
+                    required
+                    value={alocForm.obra_id}
+                    onChange={e => setAlocForm({...alocForm, obra_id: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Selecione a obra...</option>
+                    {obras.map(o => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data Início *</label>
+                    <input
+                      type="date"
+                      required
+                      value={alocForm.data_inicio}
+                      onChange={e => setAlocForm({...alocForm, data_inicio: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data Fim *</label>
+                    <input
+                      type="date"
+                      required
+                      value={alocForm.data_fim}
+                      onChange={e => setAlocForm({...alocForm, data_fim: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Turno / Período</label>
+                  <select
+                    value={alocForm.periodo}
+                    onChange={e => setAlocForm({...alocForm, periodo: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value="dia_inteiro">Dia Inteiro (Integral)</option>
+                    <option value="manha">Manhã</option>
+                    <option value="tarde">Tarde</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Modalidade de Pagamento *</label>
+                  <select
+                    required
+                    value={alocForm.modalidade_pagamento}
+                    onChange={e => setAlocForm({...alocForm, modalidade_pagamento: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value="diaria">Por Diária</option>
+                    <option value="fechado">Valor Fechado (Empreita)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {alocForm.modalidade_pagamento === 'diaria' && (
+                    <div className="col-span-2">
+                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor da Diária (R$)</label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 150.00"
+                        value={alocForm.valor_diaria}
+                        onChange={e => setAlocForm({...alocForm, valor_diaria: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1">Deixe em branco para usar o valor cadastrado do funcionário.</p>
+                    </div>
+                  )}
+
+                  {alocForm.modalidade_pagamento === 'fechado' && (
+                    <div className="col-span-2">
+                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor Fechado Total (R$)</label>
+                      <input
+                        type="number"
+                        required
+                        placeholder="Ex: 5000.00"
+                        value={alocForm.valor_fechado}
+                        onChange={e => setAlocForm({...alocForm, valor_fechado: e.target.value})}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="aloc-form"
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg transition-all"
+              >
+                Confirmar Alocação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CONFIRMAR EXCLUSÃO DE FUNCIONÁRIO                 */}
+      {/* ======================================================== */}
+      {isDeleteFuncModalOpen && deletingFuncionario && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-white">Excluir Colaborador?</h3>
+              <p className="text-xs text-slate-300 mt-1">
+                Tem certeza que deseja remover o colaborador <strong className="text-white">"{deletingFuncionario.nome}"</strong>?
+              </p>
+              {deletingFuncionario.total_alocacoes > 0 && (
+                <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>As alocações vinculadas a este colaborador também serão removidas do calendário.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setIsDeleteFuncModalOpen(false);
+                  setDeletingFuncionario(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDeleteFuncionario}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white shadow-lg transition-all"
+              >
+                Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: CONFIRMAR EXCLUSÃO DE ALOCAÇÃO                    */}
+      {/* ======================================================== */}
+      {isDeleteAlocModalOpen && deletingAlocacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center">
+              <Calendar className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-white">Remover Alocação?</h3>
+              <p className="text-xs text-slate-300 mt-1">
+                Deseja remover a alocação de <strong className="text-white">"{deletingAlocacao.funcionario_nome}"</strong> na obra <strong className="text-white">"{deletingAlocacao.obra}"</strong>?
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setIsDeleteAlocModalOpen(false);
+                  setDeletingAlocacao(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmDeleteAlocacao}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-600 text-white shadow-lg transition-all"
+              >
+                Sim, Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: NOVA EQUIPE                                         */}
+      {/* ======================================================== */}
+      {showModal && modalType === 'equipe' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">Cadastrar Equipe</h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <form id="equipe-form" onSubmit={handleSaveEquipe} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Nome da Equipe *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Equipe Alpha"
+                    value={equipeForm.nome}
+                    onChange={e => setEquipeForm({...equipeForm, nome: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Líder da Equipe</label>
+                  <select
+                    value={equipeForm.lider_id}
+                    onChange={e => setEquipeForm({...equipeForm, lider_id: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Nenhum (Sem Líder)</option>
+                    {funcionarios.filter(f => f.lider).map(f => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="equipe-form"
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all"
+              >
+                Salvar Equipe
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL: NOVO PAGAMENTO                                      */}
+      {/* ======================================================== */}
+      {showModal && modalType === 'pagamento' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-rose-400" />
+                <h3 className="text-base font-bold text-white">Lançar Pagamento</h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <form id="pagamento-form" onSubmit={handleSavePagamento} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Funcionário *</label>
+                  <select
+                    required
+                    value={pagamentoForm.funcionario_id}
+                    onChange={e => setPagamentoForm({...pagamentoForm, funcionario_id: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="">Selecione o funcionário...</option>
+                    {funcionarios.map(f => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Obra Relacionada *</label>
+                  <select
+                    required
+                    value={pagamentoForm.obra_id}
+                    onChange={e => setPagamentoForm({...pagamentoForm, obra_id: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="">Selecione a obra...</option>
+                    {obras.map(o => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data do Pagamento *</label>
+                    <input
+                      type="date"
+                      required
+                      value={pagamentoForm.data_pagamento}
+                      onChange={e => setPagamentoForm({...pagamentoForm, data_pagamento: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Modalidade *</label>
+                    <select
+                      required
+                      value={pagamentoForm.modalidade}
+                      onChange={e => setPagamentoForm({...pagamentoForm, modalidade: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+                    >
+                      <option value="diaria">Por Diária</option>
+                      <option value="fechado">Fechado/Empreita</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Valor Total a Pagar (R$) *</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="Ex: 850.00"
+                    value={pagamentoForm.valor_pago}
+                    onChange={e => setPagamentoForm({...pagamentoForm, valor_pago: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-emerald-400 font-bold focus:outline-none focus:border-rose-500"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">Este valor será lançado automaticamente como despesa de Mão de Obra Própria no Caixa Pequeno da obra selecionada.</p>
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                form="pagamento-form"
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-all"
+              >
+                Lançar Pagamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

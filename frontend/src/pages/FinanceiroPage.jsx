@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, Plus, ArrowUpRight, ArrowDownRight, Check, AlertCircle, RefreshCw, X, TrendingUp, TrendingDown, Clock, CreditCard } from 'lucide-react';
 import api from '../services/api';
 
-export default function FinanceiroPage({ selectedObraId, obras }) {
+export default function FinanceiroPage({ selectedObraId, obras, user }) {
   const [activeTab, setActiveTab] = useState('resumo');
   const [fluxo, setFluxo] = useState(null);
   const [receitas, setReceitas] = useState([]);
   const [caixaPequeno, setCaixaPequeno] = useState([]);
+  const [orcadoVsRealizado, setOrcadoVsRealizado] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Modals state
@@ -31,14 +32,16 @@ export default function FinanceiroPage({ selectedObraId, obras }) {
     setIsLoading(true);
     try {
       const queryParam = selectedObraId ? `?obra_id=${selectedObraId}` : '';
-      const [fluxoRes, receitasRes, caixaRes] = await Promise.all([
+      const [fluxoRes, receitasRes, caixaRes, orcadoRes] = await Promise.all([
         api.get(`/financeiro/fluxo${queryParam}`),
         api.get(`/financeiro/receitas${queryParam}`),
-        api.get(`/financeiro/caixa-pequeno${queryParam}`)
+        api.get(`/financeiro/caixa-pequeno${queryParam}`),
+        api.get(`/dashboards/orcado-vs-realizado${queryParam}`)
       ]);
       setFluxo(fluxoRes.data);
       setReceitas(receitasRes.data);
       setCaixaPequeno(caixaRes.data);
+      setOrcadoVsRealizado(orcadoRes.data);
     } catch (error) {
       console.error("Erro ao buscar dados financeiros:", error);
     } finally {
@@ -142,8 +145,8 @@ export default function FinanceiroPage({ selectedObraId, obras }) {
       )}
 
       {/* Navegação por Abas */}
-      <div className="flex gap-2 p-1 bg-slate-900/50 rounded-xl border border-slate-800/60 w-fit">
-        {['resumo', 'receitas', 'caixapequeno'].map((tab) => (
+      <div className="flex gap-2 p-1 bg-slate-900/50 rounded-xl border border-slate-800/60 w-fit flex-wrap">
+        {['resumo', 'orcado_realizado', 'receitas', 'caixapequeno'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -154,6 +157,7 @@ export default function FinanceiroPage({ selectedObraId, obras }) {
             }`}
           >
             {tab === 'resumo' && 'Resumo & Fluxo'}
+            {tab === 'orcado_realizado' && 'Orçado x Realizado'}
             {tab === 'receitas' && 'Receitas & Faturamento'}
             {tab === 'caixapequeno' && 'Caixa Pequeno'}
           </button>
@@ -214,6 +218,94 @@ export default function FinanceiroPage({ selectedObraId, obras }) {
                 <span className="text-slate-300">Pedidos de Compra</span>
                 <span className="font-semibold text-white">{formatMoney(fluxo.despesa_compras)}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'orcado_realizado' && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">Desdobramento por Categoria</h3>
+            <button className="text-sm font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+              Exportar PDF
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {orcadoVsRealizado.map(cat => {
+              const diferenca = cat.orcado - cat.realizado;
+              const status = diferenca >= 0 ? 'dentro' : (Math.abs(diferenca) <= (cat.orcado * 0.1) ? 'atencao' : 'estouro');
+              const statusColor = status === 'dentro' ? 'text-emerald-400' : (status === 'atencao' ? 'text-amber-400' : 'text-rose-400');
+              const bgColor = status === 'dentro' ? 'bg-emerald-500/10' : (status === 'atencao' ? 'bg-amber-500/10' : 'bg-rose-500/10');
+              const barColor = status === 'dentro' ? 'bg-emerald-500' : (status === 'atencao' ? 'bg-amber-500' : 'bg-rose-500');
+
+              return (
+                <div key={cat.id} className="glass-card p-5 rounded-2xl flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${cat.cor}`}></div>
+                      <h4 className="font-bold text-white text-sm">{cat.categoria}</h4>
+                    </div>
+                    <div className={`px-2 py-1 rounded text-xs font-bold ${statusColor} ${bgColor}`}>
+                      {status === 'dentro' ? 'Dentro do Orçado' : (status === 'atencao' ? 'Atenção' : 'Estouro')}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <span className="text-xs font-semibold text-slate-400 block mb-1">Orçado</span>
+                      <span className="text-lg font-bold text-white">{formatMoney(cat.orcado)}</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-slate-400 block mb-1">Realizado</span>
+                      <span className="text-lg font-bold text-slate-200">{formatMoney(cat.realizado)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs font-medium">
+                      <span className="text-slate-400">Progresso</span>
+                      <span className={statusColor}>{cat.pct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                      <div className={`h-2.5 rounded-full ${barColor} transition-all duration-1000`} style={{ width: `${Math.min(cat.pct, 100)}%` }}></div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center text-xs">
+                    <span className="text-slate-400 font-medium">Diferença</span>
+                    <span className={`font-bold ${statusColor}`}>
+                      {diferenca > 0 ? '+' : ''}{formatMoney(diferenca)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="glass-card p-6 rounded-2xl flex items-center justify-between">
+            <div>
+              <h4 className="text-base font-bold text-white">Resumo Total da Obra</h4>
+              <p className="text-xs text-slate-400 mt-1">Comparativo consolidado de todas as categorias</p>
+            </div>
+            <div className="text-right">
+              {(() => {
+                const totalOrcado = orcadoVsRealizado.reduce((acc, curr) => acc + curr.orcado, 0);
+                const totalRealizado = orcadoVsRealizado.reduce((acc, curr) => acc + curr.realizado, 0);
+                const diff = totalOrcado - totalRealizado;
+                const pct = totalOrcado > 0 ? (totalRealizado / totalOrcado) * 100 : 0;
+                const isEstouro = diff < 0;
+
+                return (
+                  <>
+                    <div className="text-2xl font-bold text-white">{formatMoney(totalRealizado)} <span className="text-sm font-medium text-slate-400">/ {formatMoney(totalOrcado)}</span></div>
+                    <div className={`text-xs font-bold mt-1 ${isEstouro ? 'text-rose-400' : 'text-emerald-400'}`}>
+                      {isEstouro ? 'Estourou em ' : 'Economia de '} {formatMoney(Math.abs(diff))} ({pct.toFixed(1)}%)
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -318,6 +410,16 @@ export default function FinanceiroPage({ selectedObraId, obras }) {
                       </span>
                     )}
                   </div>
+                  {item.approved_by && item.status === 'aprovado' && (
+                    <div className="w-full text-right text-[9px] text-slate-500 mt-2 sm:mt-0 sm:w-auto">
+                      Aprovado por {item.approved_by === user?.id ? 'Você' : 'Sócio'}
+                    </div>
+                  )}
+                  {item.created_by && item.status === 'pendente_aprovacao' && (
+                    <div className="w-full text-right text-[9px] text-slate-500 mt-2 sm:mt-0 sm:w-auto">
+                      Criado por {item.created_by === user?.id ? 'Você' : 'Sócio'}
+                    </div>
+                  )}
                 </div>
               ))
             )}

@@ -15,6 +15,7 @@ from .routes import (
     calendario_router,
     dashboards_router,
     visitas_router,
+    audit_router,
 )
 
 load_dotenv()
@@ -56,6 +57,7 @@ app.include_router(gestao_router, prefix=API_PREFIX)
 app.include_router(calendario_router, prefix=API_PREFIX)
 app.include_router(dashboards_router, prefix=API_PREFIX)
 app.include_router(visitas_router, prefix=API_PREFIX)
+app.include_router(audit_router, prefix=API_PREFIX)
 
 @app.get("/", tags=["Health Check"])
 async def root():

@@ -16,6 +16,7 @@ const CalendarioPage = lazy(() => import('./pages/CalendarioPage'));
 const FinanceiroPage = lazy(() => import('./pages/FinanceiroPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VisitasPage = lazy(() => import('./pages/VisitasPage'));
+const RastreabilidadePage = lazy(() => import('./pages/RastreabilidadePage'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -69,7 +70,7 @@ export default function App() {
     },
     {
       id: "empreiteiros",
-      categoria: "Empreiteiros & Terceirizados",
+      categoria: "Terceiros",
       realizado: 0.0,
       orcado: 0.0,
       pct: 0.0,
@@ -221,18 +222,19 @@ export default function App() {
                   onClearInitialOrcamentoData={() => setPendingOrcamentoData(null)}
                 />
               )}
-              {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} />}
-              {activeTab === 'rdo' && <RDOPage />}
-              {activeTab === 'compras' && <ComprasPage obras={obras} />}
-              {activeTab === 'gestao' && <GestaoPage obras={obras} />}
-              {activeTab === 'calendario' && <CalendarioPage obras={obras} />}
+              {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} user={session?.user} />}
+              {activeTab === 'rdo' && <RDOPage user={session?.user} />}
+              {activeTab === 'compras' && <ComprasPage obras={obras} user={session?.user} />}
+              {activeTab === 'gestao' && <GestaoPage obras={obras} user={session?.user} />}
+              {activeTab === 'calendario' && <CalendarioPage obras={obras} user={session?.user} />}
               {activeTab === 'visitas' && (
                 <VisitasPage 
                   user={session?.user} 
                   onCreateOrcamento={handleCreateOrcamentoFromVisita} 
                 />
               )}
-              {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} />}
+              {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+              {activeTab === 'rastreabilidade' && <RastreabilidadePage />}
             </Suspense>
           </div>
         </main>

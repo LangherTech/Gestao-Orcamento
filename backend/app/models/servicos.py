@@ -146,6 +146,8 @@ class OrcamentoCreate(BaseModel):
     notas: Optional[str] = None
     impostos_percentual: float = Field(0.0, ge=0)
     margem_bdi_percentual: float = Field(0.0, ge=0)
+    condicao_pagamento: Optional[str] = None
+    modo_exibicao: Optional[str] = Field("resumido", description="resumido ou detalhado")
     itens: List[OrcamentoItemInput] = []
 
 class OrcamentoUpdate(BaseModel):
@@ -164,6 +166,8 @@ class OrcamentoUpdate(BaseModel):
     notas: Optional[str] = None
     impostos_percentual: Optional[float] = None
     margem_bdi_percentual: Optional[float] = None
+    condicao_pagamento: Optional[str] = None
+    modo_exibicao: Optional[str] = None
     itens: Optional[List[OrcamentoItemInput]] = None
 
 class OrcamentoStatusUpdate(BaseModel):
@@ -189,6 +193,8 @@ class OrcamentoResponse(BaseModel):
     notas: Optional[str] = None
     impostos_percentual: float = 0.0
     margem_bdi_percentual: float = 0.0
+    condicao_pagamento: Optional[str] = None
+    modo_exibicao: Optional[str] = "resumido"
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

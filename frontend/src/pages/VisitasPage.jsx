@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { supabase } from '../services/supabase';
+import { formatTelefone } from '../utils/masks';
 
 export default function VisitasPage({ user, onCreateOrcamento }) {
   const [visitas, setVisitas] = useState([]);
@@ -143,7 +144,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
     setFormData({
       nome: visita.nome || '',
       pessoa_contato: visita.pessoa_contato || '',
-      telefone: visita.telefone || visita.contato || '',
+      telefone: visita.telefone || visita.contato ? formatTelefone(visita.telefone || visita.contato) : '',
       email: visita.email || '',
       endereco: visita.endereco || '',
       classificacao: visita.classificacao || 'Normal',
@@ -858,8 +859,9 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
                   <input 
                     type="text" 
                     value={formData.telefone} 
-                    onChange={e => setFormData({ ...formData, telefone: e.target.value })} 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder-slate-600" 
+                    maxLength={15}
+                    onChange={e => setFormData({ ...formData, telefone: formatTelefone(e.target.value) })} 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 placeholder-slate-600 font-mono" 
                     placeholder="(47) 99999-9999"
                   />
                 </div>

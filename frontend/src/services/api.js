@@ -24,10 +24,30 @@ api.interceptors.request.use(
 
 // Interceptor de resposta para tratamento global de erros
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Interceptar para Rastreabilidade de Ações
+    const method = response.config.method?.toLowerCase();
+    if (['post', 'put', 'delete'].includes(method) && !response.config.url.includes('/audit')) {
+      const parts = response.config.url.split('?')[0].split('/').filter(p => p.length > 0);
+      const entity_type = parts[0] || 'geral';
+      
+      // Envia log sem bloquear a requisição atual
+      axios.post(`${API_BASE_URL}/audit`, {
+        action: method.toUpperCase(),
+        entity_type: entity_type,
+        entity_id: response.data?.id || null,
+        details: { url: response.config.url }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('edifica_token')}`
+        }
+      }).catch(err => console.error('Falha ao registrar rastreabilidade', err));
+    }
+    
+    return response;
+  },
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Token expirado ou inválido
       console.warn('[Edifica API] Sessão expirada ou não autorizada.');
     }
     return Promise.reject(error);

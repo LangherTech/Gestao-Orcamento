@@ -104,7 +104,7 @@ function PhotoLightboxModal({ photo, onClose }) {
 // ========================================
 // Componente Principal: RDOPage
 // ========================================
-export default function RDOPage() {
+export default function RDOPage({ user }) {
   const [rdos, setRdos] = useState([]);
   const [obras, setObras] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -178,12 +178,8 @@ export default function RDOPage() {
     setFormStatusTrabalho('praticavel');
     setFormClimaManha('Ensolarado');
     setFormClimaTarde('Ensolarado');
-    setFormEquipe([
-      'Carlos Mendes (Mestre de Obras)',
-      'João Silva (Pedreiro)',
-      'Antônio Prado (Ajudante)'
-    ]);
-    setFormTotalTrabalhadores(3);
+    setFormEquipe([]);
+    setFormTotalTrabalhadores(0);
     setFormAtividades('');
     setFormMateriais('');
     setFormEquipamentos('');
@@ -219,6 +215,32 @@ export default function RDOPage() {
     setFormError('');
     setIsFormOpen(true);
   };
+
+  // Carregar equipe escalada ao mudar obra ou data (apenas para novos RDOs)
+  useEffect(() => {
+    if (isFormOpen && !editingRdo && formObraId && formData) {
+      const fetchAlocacoes = async () => {
+        try {
+          const res = await api.get(`/calendario/alocacoes?obra_id=${formObraId}`);
+          if (res.data && Array.isArray(res.data)) {
+            const activeAlocacoes = res.data.filter(a => {
+              return a.data_inicio <= formData && a.data_fim >= formData;
+            });
+            const equipeStrings = activeAlocacoes.map(a => {
+               const cargo = a.funcionario_cargo ? ` (${a.funcionario_cargo})` : '';
+               return `${a.funcionario_nome}${cargo}`;
+            });
+            const uniqueEquipe = [...new Set(equipeStrings)];
+            setFormEquipe(uniqueEquipe);
+            setFormTotalTrabalhadores(uniqueEquipe.length);
+          }
+        } catch (err) {
+          console.error('Erro ao carregar equipe escalada', err);
+        }
+      };
+      fetchAlocacoes();
+    }
+  }, [formObraId, formData, isFormOpen, editingRdo]);
 
   // Adicionar membro na equipe
   const handleAddMembro = (nome) => {
@@ -565,6 +587,11 @@ export default function RDOPage() {
                       </button>
                     </div>
                   </div>
+                  {rdo.created_by && (
+                    <div className="w-full text-right text-[9px] text-slate-500 mt-2">
+                      Preenchido por {rdo.created_by === user?.id ? 'Você' : 'Sócio'}
+                    </div>
+                  )}
                 </div>
 
                 {/* Conteúdo Técnico do RDO */}

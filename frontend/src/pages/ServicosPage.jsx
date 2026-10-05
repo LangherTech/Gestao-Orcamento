@@ -942,6 +942,7 @@ function OrcamentoModal({
   const [validadeDias, setValidadeDias] = useState(15);
   const [margemBdiPercentual, setMargemBdiPercentual] = useState(15.0);
   const [impostosPercentual, setImpostosPercentual] = useState(20.5);
+  const [modoExibicao, setModoExibicao] = useState('resumido');
   const [step, setStep] = useState(1); // 1: edição/seleção, 2: preview/PDF
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -989,6 +990,7 @@ function OrcamentoModal({
       setPrazoDias(initialOrcamento.prazo_dias || 10);
       setPrazoGarantia(initialOrcamento.prazo_garantia || '12 (doze) meses');
       setObjetivoCustom(initialOrcamento.objetivo || '');
+      setCondicoesPagamentoCustom(initialOrcamento.condicao_pagamento || '');
       setObraId(initialOrcamento.obra_id || '');
       setStatus(initialOrcamento.status || 'rascunho');
       setObservacoes(initialOrcamento.observacoes || '');
@@ -996,6 +998,7 @@ function OrcamentoModal({
       setValidadeDias(initialOrcamento.validade_dias || 15);
       setMargemBdiPercentual(initialOrcamento.margem_bdi_percentual ?? 15.0);
       setImpostosPercentual(initialOrcamento.impostos_percentual ?? 20.5);
+      setModoExibicao(initialOrcamento.modo_exibicao || 'resumido');
       setItens(
         (initialOrcamento.orcamento_itens || initialOrcamento.itens || []).map(it => ({
           servico_id: it.servico_id,
@@ -1024,6 +1027,7 @@ function OrcamentoModal({
       setValidadeDias(15);
       setMargemBdiPercentual(15.0);
       setImpostosPercentual(20.5);
+      setModoExibicao('resumido');
       setItens([]);
       setStep(1);
       setCurrentId(null);
@@ -1190,6 +1194,8 @@ function OrcamentoModal({
         notas: notas.trim() || null,
         margem_bdi_percentual: margemBdiPercentual,
         impostos_percentual: impostosPercentual,
+        condicao_pagamento: condicoesPagamentoCustom.trim() || null,
+        modo_exibicao: modoExibicao,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
@@ -1259,6 +1265,8 @@ function OrcamentoModal({
         notas: notas.trim() || null,
         margem_bdi_percentual: margemBdiPercentual,
         impostos_percentual: impostosPercentual,
+        condicao_pagamento: condicoesPagamentoCustom.trim() || null,
+        modo_exibicao: modoExibicao,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
@@ -1317,6 +1325,8 @@ function OrcamentoModal({
           status: status,
           observacoes: observacoes.trim() || null,
           notas: notas.trim() || null,
+          condicao_pagamento: condicoesPagamentoCustom.trim() || null,
+          modo_exibicao: modoExibicao,
           itens: itens.map(i => ({
             servico_id: i.servico_id || null,
             descricao: i.servico_nome,
@@ -1964,6 +1974,8 @@ function OrcamentoModal({
           readOnlyView={readOnlyView}
           onSave={!readOnlyView ? () => handleSaveOrcamento() : null}
           saving={saving}
+          modoVisualizacao={modoExibicao}
+          onModoVisualizacaoChange={(modo) => setModoExibicao(modo)}
         />
       )}
     </Modal>

@@ -458,6 +458,8 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         "notas": orcamento.notas,
         "impostos_percentual": orcamento.impostos_percentual,
         "margem_bdi_percentual": orcamento.margem_bdi_percentual,
+        "condicao_pagamento": orcamento.condicao_pagamento,
+        "modo_exibicao": orcamento.modo_exibicao,
         "created_by": None if user.get("is_mock") else user.get("id"),
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -545,7 +547,8 @@ async def update_orcamento(
     # Preenche apenas os campos fornecidos
     for key in ["obra_id", "cliente_nome", "cliente_contato", "cliente_telefone", "cliente_email", 
                 "cliente_endereco", "prazo_dias", "prazo_garantia", "objetivo", "validade_dias", 
-                "status", "observacoes", "notas", "impostos_percentual", "margem_bdi_percentual"]:
+                "status", "observacoes", "notas", "impostos_percentual", "margem_bdi_percentual",
+                "condicao_pagamento", "modo_exibicao"]:
         if getattr(orcamento, key) is not None:
             update_dict[key] = str(getattr(orcamento, key)) if key == "obra_id" else getattr(orcamento, key)
 

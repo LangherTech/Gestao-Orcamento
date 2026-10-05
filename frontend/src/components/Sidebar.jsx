@@ -10,7 +10,8 @@ import {
   Users2,
   DollarSign,
   FileText,
-  ChevronRight
+  ChevronRight,
+  History
 } from 'lucide-react';
 
 export const navigationItems = [
@@ -20,10 +21,11 @@ export const navigationItems = [
   { id: 'cronograma', label: 'Cronograma', icon: CalendarDays },
   { id: 'rdo', label: 'Diário de Obra (RDO)', icon: ClipboardList },
   { id: 'compras', label: 'Compras & Insumos', icon: ShoppingCart },
-  { id: 'gestao', label: 'Empreiteiros', icon: HardHat },
+  { id: 'gestao', label: 'Terceiros', icon: HardHat },
   { id: 'calendario', label: 'Equipe & Calendário', icon: Users2 },
   { id: 'visitas', label: 'Visitas & Prospecção', icon: Building2 }, // Using Building2 or MapPin (not imported)
   { id: 'financeiro', label: 'Financeiro & Caixa', icon: DollarSign },
+  { id: 'rastreabilidade', label: 'Rastreabilidade', icon: History },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {
