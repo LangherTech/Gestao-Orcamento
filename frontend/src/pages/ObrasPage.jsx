@@ -2,11 +2,28 @@ import React, { useState, useMemo } from 'react';
 import {
   Building2, Plus, Calendar, MapPin, DollarSign, ArrowUpRight,
   X, AlertCircle, CheckCircle2, RotateCcw, Archive, ArchiveRestore,
-  Search, Edit3, Trash2, Check, Clock, Filter
+  Search, Edit3, Trash2, Check, Clock, Filter, Map as MapIcon, List
 } from 'lucide-react';
 import api from '../services/api';
+import { searchAddress } from '../services/geoapify';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
+  // View mode
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
+
   // Estados de busca e filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('ativas'); // 'ativas', 'concluidas', 'arquivadas', 'todas'
@@ -18,6 +35,11 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // Autocomplete de Endereço
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -32,7 +54,9 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
     orcamento_caixa: '',
     valor_aprovado: '',
     status: 'ativa',
-    arquivada: false
+    arquivada: false,
+    latitude: null,
+    longitude: null
   });
 
   const showToast = (message, type = 'success') => {
@@ -102,12 +126,36 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
     });
   }, [obras, searchTerm, activeTab]);
 
-  const handleInputChange = (e) => {
+  const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    if (name === 'endereco') {
+      if (value.length > 3) {
+        setIsSearchingAddress(true);
+        setShowSuggestions(true);
+        const results = await searchAddress(value);
+        setAddressSuggestions(results);
+        setIsSearchingAddress(false);
+      } else {
+        setAddressSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }
+  };
+
+  const handleSelectAddress = (feature) => {
+    setFormData(prev => ({
+      ...prev,
+      endereco: feature.properties.formatted,
+      latitude: feature.properties.lat,
+      longitude: feature.properties.lon
+    }));
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
   };
 
   const handleOpenCreateModal = () => {
@@ -124,8 +172,12 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
       orcamento_caixa: '',
       valor_aprovado: '',
       status: 'ativa',
-      arquivada: false
+      arquivada: false,
+      latitude: null,
+      longitude: null
     });
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
     setError(null);
     setIsModalOpen(true);
   };
@@ -144,8 +196,12 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
       orcamento_caixa: obra.orcamento_caixa || '',
       valor_aprovado: obra.valor_aprovado || '',
       status: obra.status || 'ativa',
-      arquivada: Boolean(obra.arquivada)
+      arquivada: Boolean(obra.arquivada),
+      latitude: obra.latitude || null,
+      longitude: obra.longitude || null
     });
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
     setError(null);
     setIsModalOpen(true);
   };
@@ -164,7 +220,9 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
         valor_aprovado: parseFloat(String(formData.valor_aprovado || 0).replace(',', '.')) || 0,
         data_inicio: formData.data_inicio || null,
         data_prevista_fim: formData.data_prevista_fim || null,
-        data_real_fim: formData.data_real_fim || null
+        data_real_fim: formData.data_real_fim || null,
+        latitude: formData.latitude,
+        longitude: formData.longitude
       };
 
       if (editingObra) {
@@ -357,6 +415,31 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
             </span>
           </button>
         </div>
+        {/* View Toggle */}
+        <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 shrink-0 ml-2">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-slate-700 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            <span className="hidden sm:inline">Lista</span>
+          </button>
+          <button
+            onClick={() => setViewMode('map')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              viewMode === 'map'
+                ? 'bg-slate-700 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <MapIcon className="w-4 h-4" />
+            <span className="hidden sm:inline">Mapa</span>
+          </button>
+        </div>
       </div>
 
       {/* Indicador de busca ativa */}
@@ -374,231 +457,273 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
         </div>
       )}
 
-      {/* Grid de Cards das Obras */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredObras.map((obra) => {
-          const isAtiva = obra.status === 'ativa';
-          const isArquivada = Boolean(obra.arquivada);
-          const valorAprovadoCalc = obra.orcamentos?.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
-          const valorPendenteCalc = obra.orcamentos?.filter(o => o.status === 'rascunho' || o.status === 'enviado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
+      {/* Visualização de Obras */}
+      {viewMode === 'list' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredObras.map((obra) => {
+            const isAtiva = obra.status === 'ativa';
+            const isArquivada = Boolean(obra.arquivada);
+            const valorAprovadoCalc = obra.orcamentos?.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
+            const valorPendenteCalc = obra.orcamentos?.filter(o => o.status === 'rascunho' || o.status === 'enviado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
 
-          return (
-            <div 
-              key={obra.id} 
-              className={`glass-card p-5 sm:p-6 rounded-2xl flex flex-col justify-between transition-all duration-200 border ${
-                isArquivada
-                  ? 'border-amber-500/20 bg-slate-900/40 opacity-90'
-                  : isAtiva
-                  ? 'border-slate-800/80 hover:border-emerald-500/30'
-                  : 'border-slate-800/80 hover:border-blue-500/30'
-              }`}
-            >
+            return (
+              <div 
+                key={obra.id} 
+                className={`glass-card p-5 sm:p-6 rounded-2xl flex flex-col justify-between transition-all duration-200 border ${
+                  isArquivada
+                    ? 'border-amber-500/20 bg-slate-900/40 opacity-90'
+                    : isAtiva
+                    ? 'border-slate-800/80 hover:border-emerald-500/30'
+                    : 'border-slate-800/80 hover:border-blue-500/30'
+                }`}
+              >
+                <div>
+                  {/* Header do Card com Badges e Ações de Topo */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        {/* Badge de Status (Ativa / Concluída) */}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          isAtiva 
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isAtiva ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
+                          {isAtiva ? 'Ativa' : 'Concluída'}
+                        </span>
+
+                        {/* Badge Arquivada (quando aplicável) */}
+                        {isArquivada && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <Archive className="w-3 h-3" />
+                            <span>Arquivada</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-lg font-bold text-white truncate" title={obra.nome}>
+                        {obra.nome}
+                      </h3>
+                      <p className="text-xs text-slate-300 font-medium truncate mt-0.5">
+                        Cliente: {obra.cliente || 'Não informado'}
+                      </p>
+                    </div>
+
+                    {/* Botões de Ações Rápidas (Editar / Excluir) */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditModal(obra)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Editar Obra"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingObra(obra)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Excluir Obra"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Endereço */}
+                  {obra.endereco && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="truncate">{obra.endereco}</span>
+                    </div>
+                  )}
+
+                  {/* Datas de Início / Término */}
+                  {(obra.data_inicio || obra.data_prevista_fim || obra.data_real_fim) && (
+                    <div className="flex items-center gap-4 text-[11px] text-slate-400 mb-3 bg-slate-950/40 px-3 py-1.5 rounded-xl border border-slate-800/50">
+                      {obra.data_inicio && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-500">Início:</span>
+                          <span className="text-slate-200 font-medium">{formatDate(obra.data_inicio)}</span>
+                        </div>
+                      )}
+                      {obra.status === 'concluida' && obra.data_real_fim ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-blue-400">Concluída em:</span>
+                          <span className="text-white font-medium">{formatDate(obra.data_real_fim)}</span>
+                        </div>
+                      ) : obra.data_prevista_fim ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-500">Previsão:</span>
+                          <span className="text-slate-200 font-medium">{formatDate(obra.data_prevista_fim)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* Resumo Financeiro */}
+                  <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-2 mb-4">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-400">Orçamento Aprovado:</span>
+                      <span className="font-bold text-white">{formatMoney(valorAprovadoCalc)}</span>
+                    </div>
+                    {valorPendenteCalc > 0 && (
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-amber-400/80">Pendente de Aprovação:</span>
+                        <span className="font-bold text-amber-400">{formatMoney(valorPendenteCalc)}</span>
+                      </div>
+                    )}
+                    {(obra.orcamento_materiais > 0 || obra.orcamento_empreiteiros > 0 || obra.orcamento_caixa > 0) && (
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">Materiais</span>
+                          <span className="text-blue-400 font-semibold">{formatMoney(obra.orcamento_materiais)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">Empreiteiros</span>
+                          <span className="text-amber-400 font-semibold">{formatMoney(obra.orcamento_empreiteiros)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">Caixa Obra</span>
+                          <span className="text-emerald-400 font-semibold">{formatMoney(obra.orcamento_caixa)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Botões de Ações Rápidas (Concluir/Reabrir, Arquivar/Desarquivar e Acessar) */}
+                <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Botão Rápido de Status (Concluir / Reabrir) */}
+                    <button
+                      onClick={() => handleToggleStatus(obra)}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        isAtiva
+                          ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30'
+                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      }`}
+                      title={isAtiva ? 'Marcar obra como concluída' : 'Reverter para obra ativa'}
+                    >
+                      {isAtiva ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                          <span>Concluir Obra</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Reabrir Obra</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Botão Rápido de Arquivar / Desarquivar (1 clique) */}
+                    <button
+                      onClick={() => handleToggleArquivar(obra)}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        isArquivada
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : 'bg-slate-800/80 hover:bg-amber-500/10 text-slate-300 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/30'
+                      }`}
+                      title={isArquivada ? 'Desarquivar e exibir na tela principal' : 'Arquivar para ocultar da tela do dia a dia'}
+                    >
+                      {isArquivada ? (
+                        <>
+                          <ArchiveRestore className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Desarquivar</span>
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Arquivar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Botão Principal de Detalhes / Acesso */}
+                  <button
+                    onClick={() => onSelectObra(obra.id)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer"
+                  >
+                    <span>Acessar Painel da Obra</span>
+                    <ArrowUpRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredObras.length === 0 && (
+            <div className="col-span-full py-16 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800 border-dashed space-y-3">
+              <Building2 className="w-10 h-10 text-slate-600 mx-auto" />
               <div>
-                {/* Header do Card com Badges e Ações de Topo */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {/* Badge de Status (Ativa / Concluída) */}
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        isAtiva 
+                <p className="text-base font-semibold text-slate-300">
+                  {searchTerm 
+                    ? `Nenhuma obra encontrada para "${searchTerm}".`
+                    : activeTab === 'arquivadas'
+                    ? 'Nenhuma obra arquivada no momento.'
+                    : activeTab === 'concluidas'
+                    ? 'Nenhuma obra concluída no momento.'
+                    : 'Nenhuma obra ativa encontrada.'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {searchTerm 
+                    ? 'A busca pesquisa em todas as obras (ativas, concluídas e arquivadas).' 
+                    : 'Utilize o botão acima para cadastrar sua primeira obra.'}
+                </p>
+              </div>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer"
+                >
+                  Limpar Busca
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="h-[600px] w-full rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative z-0">
+          <MapContainer 
+            center={[-23.5505, -46.6333]} // Padrão São Paulo
+            zoom={4} 
+            scrollWheelZoom={true} 
+            style={{ height: '100%', width: '100%', zIndex: 0 }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {filteredObras.filter(o => o.latitude && o.longitude).map(obra => (
+              <Marker key={obra.id} position={[obra.latitude, obra.longitude]}>
+                <Popup className="rounded-xl overflow-hidden !p-0">
+                  <div className="p-4 bg-slate-900 text-white min-w-[200px]">
+                    <h4 className="font-bold text-sm mb-1">{obra.nome}</h4>
+                    <p className="text-xs text-slate-400 mb-2 truncate">{obra.endereco}</p>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        obra.status === 'ativa' 
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                           : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isAtiva ? 'bg-emerald-400 animate-pulse' : 'bg-blue-400'}`} />
-                        {isAtiva ? 'Ativa' : 'Concluída'}
+                        {obra.status === 'ativa' ? 'Ativa' : 'Concluída'}
                       </span>
-
-                      {/* Badge Arquivada (quando aplicável) */}
-                      {isArquivada && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                          <Archive className="w-3 h-3" />
-                          <span>Arquivada</span>
-                        </span>
-                      )}
                     </div>
-
-                    <h3 className="text-lg font-bold text-white truncate" title={obra.nome}>
-                      {obra.nome}
-                    </h3>
-                    <p className="text-xs text-slate-300 font-medium truncate mt-0.5">
-                      Cliente: {obra.cliente || 'Não informado'}
-                    </p>
-                  </div>
-
-                  {/* Botões de Ações Rápidas (Editar / Excluir) */}
-                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => handleOpenEditModal(obra)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                      title="Editar Obra"
+                      onClick={() => onSelectObra(obra.id)}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all cursor-pointer"
                     >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeletingObra(obra)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                      title="Excluir Obra"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                      <span>Acessar Obra</span>
+                      <ArrowUpRight className="w-3 h-3" />
                     </button>
                   </div>
-                </div>
-
-                {/* Endereço */}
-                {obra.endereco && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
-                    <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="truncate">{obra.endereco}</span>
-                  </div>
-                )}
-
-                {/* Datas de Início / Término */}
-                {(obra.data_inicio || obra.data_prevista_fim || obra.data_real_fim) && (
-                  <div className="flex items-center gap-4 text-[11px] text-slate-400 mb-3 bg-slate-950/40 px-3 py-1.5 rounded-xl border border-slate-800/50">
-                    {obra.data_inicio && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-500">Início:</span>
-                        <span className="text-slate-200 font-medium">{formatDate(obra.data_inicio)}</span>
-                      </div>
-                    )}
-                    {obra.status === 'concluida' && obra.data_real_fim ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-blue-400">Concluída em:</span>
-                        <span className="text-white font-medium">{formatDate(obra.data_real_fim)}</span>
-                      </div>
-                    ) : obra.data_prevista_fim ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-500">Previsão:</span>
-                        <span className="text-slate-200 font-medium">{formatDate(obra.data_prevista_fim)}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {/* Resumo Financeiro */}
-                <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 space-y-2 mb-4">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Orçamento Aprovado:</span>
-                    <span className="font-bold text-white">{formatMoney(valorAprovadoCalc)}</span>
-                  </div>
-                  {valorPendenteCalc > 0 && (
-                    <div className="flex justify-between text-xs mt-1">
-                      <span className="text-amber-400/80">Pendente de Aprovação:</span>
-                      <span className="font-bold text-amber-400">{formatMoney(valorPendenteCalc)}</span>
-                    </div>
-                  )}
-                  {(obra.orcamento_materiais > 0 || obra.orcamento_empreiteiros > 0 || obra.orcamento_caixa > 0) && (
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Materiais</span>
-                        <span className="text-blue-400 font-semibold">{formatMoney(obra.orcamento_materiais)}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Empreiteiros</span>
-                        <span className="text-amber-400 font-semibold">{formatMoney(obra.orcamento_empreiteiros)}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Caixa Obra</span>
-                        <span className="text-emerald-400 font-semibold">{formatMoney(obra.orcamento_caixa)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Botões de Ações Rápidas (Concluir/Reabrir, Arquivar/Desarquivar e Acessar) */}
-              <div className="space-y-2 pt-1 border-t border-slate-800/60">
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Botão Rápido de Status (Concluir / Reabrir) */}
-                  <button
-                    onClick={() => handleToggleStatus(obra)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      isAtiva
-                        ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30'
-                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                    }`}
-                    title={isAtiva ? 'Marcar obra como concluída' : 'Reverter para obra ativa'}
-                  >
-                    {isAtiva ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Concluir Obra</span>
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Reabrir Obra</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Botão Rápido de Arquivar / Desarquivar (1 clique) */}
-                  <button
-                    onClick={() => handleToggleArquivar(obra)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      isArquivada
-                        ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        : 'bg-slate-800/80 hover:bg-amber-500/10 text-slate-300 hover:text-amber-300 border-slate-700/80 hover:border-amber-500/30'
-                    }`}
-                    title={isArquivada ? 'Desarquivar e exibir na tela principal' : 'Arquivar para ocultar da tela do dia a dia'}
-                  >
-                    {isArquivada ? (
-                      <>
-                        <ArchiveRestore className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Desarquivar</span>
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Arquivar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Botão Principal de Detalhes / Acesso */}
-                <button
-                  onClick={() => onSelectObra(obra.id)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer"
-                >
-                  <span>Acessar Painel da Obra</span>
-                  <ArrowUpRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {filteredObras.length === 0 && (
-          <div className="col-span-full py-16 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800 border-dashed space-y-3">
-            <Building2 className="w-10 h-10 text-slate-600 mx-auto" />
-            <div>
-              <p className="text-base font-semibold text-slate-300">
-                {searchTerm 
-                  ? `Nenhuma obra encontrada para "${searchTerm}".`
-                  : activeTab === 'arquivadas'
-                  ? 'Nenhuma obra arquivada no momento.'
-                  : activeTab === 'concluidas'
-                  ? 'Nenhuma obra concluída no momento.'
-                  : 'Nenhuma obra ativa encontrada.'}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {searchTerm 
-                  ? 'A busca pesquisa em todas as obras (ativas, concluídas e arquivadas).' 
-                  : 'Utilize o botão acima para cadastrar sua primeira obra.'}
-              </p>
-            </div>
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer"
-              >
-                Limpar Busca
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </div>
+      )}
 
       {/* Modal Criar / Editar Obra */}
       {isModalOpen && (
@@ -651,16 +776,42 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
                   />
                 </div>
                 
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative">
                   <label className="text-xs font-semibold text-slate-300">Endereço da Obra</label>
                   <input
                     type="text"
                     name="endereco"
                     value={formData.endereco}
                     onChange={handleInputChange}
+                    onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
                     placeholder="Rua, Número, Bairro, Cidade"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
                   />
+                  {/* Dropdown de sugestões */}
+                  {showSuggestions && (addressSuggestions.length > 0 || isSearchingAddress) && (
+                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                      {isSearchingAddress ? (
+                        <div className="p-3 text-xs text-slate-400 text-center flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                          Buscando...
+                        </div>
+                      ) : (
+                        addressSuggestions.map((feature, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => handleSelectAddress(feature)}
+                            className="p-3 hover:bg-slate-700/50 cursor-pointer border-b border-slate-700/50 last:border-0 flex items-start gap-2.5 transition-colors"
+                          >
+                            <MapPin className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col">
+                              <span className="text-sm text-white">{feature.properties.address_line1}</span>
+                              <span className="text-xs text-slate-400">{feature.properties.address_line2}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

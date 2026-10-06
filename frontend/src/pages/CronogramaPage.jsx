@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListChecks } from 'lucide-react';
+import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListChecks, Trash2 } from 'lucide-react';
 import api from '../services/api';
 
 export default function CronogramaPage({ selectedObraId }) {
@@ -50,7 +50,19 @@ export default function CronogramaPage({ selectedObraId }) {
       fetchData();
     } catch (error) {
       console.error("Erro ao criar etapa:", error);
-      alert('Erro ao criar a etapa.');
+      const detail = error.response?.data?.detail || 'Erro ao criar a etapa.';
+      alert(detail);
+    }
+  };
+
+  const handleDeleteEtapa = async (id, nome) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a etapa "${nome}"?`)) return;
+    try {
+      await api.delete(`/cronograma/etapas/${id}`);
+      fetchData();
+    } catch (error) {
+      console.error("Erro ao excluir etapa:", error);
+      alert(error.response?.data?.detail || "Erro ao excluir a etapa.");
     }
   };
 
@@ -147,6 +159,13 @@ export default function CronogramaPage({ selectedObraId }) {
                       {formatMoney(etapa.custo_real)} / {formatMoney(etapa.custo_previsto)}
                     </span>
                   </div>
+                  <button
+                    onClick={() => handleDeleteEtapa(etapa.id, etapa.nome)}
+                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    title="Excluir Etapa"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 

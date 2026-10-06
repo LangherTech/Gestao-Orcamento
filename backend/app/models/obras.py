@@ -17,6 +17,8 @@ class ObraBase(BaseModel):
     orcamento_caixa: float = Field(0.00, ge=0)
     status: str = Field("ativa", description="ativa ou concluida (obra iniciada não é cancelada)")
     arquivada: bool = Field(False, description="Flag visual para não poluir a tela principal")
+    latitude: Optional[float] = Field(None, description="Latitude para geolocalização")
+    longitude: Optional[float] = Field(None, description="Longitude para geolocalização")
 
 class ObraCreate(ObraBase):
     pass
@@ -35,6 +37,8 @@ class ObraUpdate(BaseModel):
     orcamento_caixa: Optional[float] = None
     status: Optional[str] = None
     arquivada: Optional[bool] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 class ObraStatusUpdate(BaseModel):
     status: str = Field(..., description="Status da obra: 'ativa' ou 'concluida'")

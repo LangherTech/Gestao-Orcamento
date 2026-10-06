@@ -390,7 +390,13 @@ export default function CalendarioPage({ obras = [], user }) {
   const handleSaveAlocacao = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post('/calendario/alocacoes', alocForm);
+      const payload = {
+        ...alocForm,
+        valor_diaria: alocForm.valor_diaria !== '' && alocForm.valor_diaria !== null ? parseFloat(alocForm.valor_diaria) : null,
+        valor_fechado: alocForm.valor_fechado !== '' && alocForm.valor_fechado !== null ? parseFloat(alocForm.valor_fechado) : null
+      };
+
+      const res = await api.post('/calendario/alocacoes', payload);
       if (res.data?.warning) {
         showToast(res.data.warning, 'warning');
       } else {
@@ -401,7 +407,10 @@ export default function CalendarioPage({ obras = [], user }) {
       fetchData();
     } catch (err) {
       console.error('Erro ao salvar alocação:', err);
-      const detail = err?.response?.data?.detail;
+      let detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(d => d.msg || d).join(', ');
+      }
       showToast(detail || 'Erro ao registrar alocação.', 'error');
     }
   };
@@ -416,21 +425,33 @@ export default function CalendarioPage({ obras = [], user }) {
       fetchData();
     } catch (err) {
       console.error('Erro ao salvar equipe:', err);
-      showToast('Erro ao registrar equipe.', 'error');
+      let detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(d => d.msg || d).join(', ');
+      }
+      showToast(detail || 'Erro ao registrar equipe.', 'error');
     }
   };
 
   const handleSavePagamento = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/calendario/pagamentos', pagamentoForm);
+      const payload = {
+        ...pagamentoForm,
+        valor_pago: parseFloat(pagamentoForm.valor_pago) || 0
+      };
+      await api.post('/calendario/pagamentos', payload);
       showToast('Pagamento registrado com sucesso!');
       setShowModal(false);
       setPagamentoForm(initialPagamentoForm);
       fetchData();
     } catch (err) {
       console.error('Erro ao salvar pagamento:', err);
-      showToast('Erro ao registrar pagamento.', 'error');
+      let detail = err?.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        detail = detail.map(d => d.msg || d).join(', ');
+      }
+      showToast(detail || 'Erro ao registrar pagamento.', 'error');
     }
   };
 

@@ -41,19 +41,19 @@ async def create_etapa(etapa: EtapaCreate, user: dict = Depends(get_current_user
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
         
-    data = etapa.model_dump()
-    data["created_by"] = None if user.get("is_mock") else user.get("id")
+    data = etapa.model_dump(mode="json")
+    user_id = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else (str(user_id) if user_id else None)
     
-    # Format dates
-    for field in ["data_prevista_inicio", "data_prevista_fim", "data_real_inicio", "data_real_fim"]:
-        if data.get(field):
-            data[field] = data[field].isoformat()
-            
-    if data.get("etapa_pai_id"):
-        data["etapa_pai_id"] = str(data["etapa_pai_id"])
-
-    res = supabase.table("etapas").insert(data).execute()
-    return res.data[0]
+    try:
+        res = supabase.table("etapas").insert(data).execute()
+        if res.data:
+            return res.data[0]
+        raise HTTPException(status_code=400, detail="Falha ao criar etapa no banco de dados.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar etapa: {str(e)}")
 
 @router.put("/etapas/{id}", response_model=dict)
 async def update_etapa(id: UUID, etapa: EtapaUpdate, user: dict = Depends(get_current_user)):
@@ -62,17 +62,31 @@ async def update_etapa(id: UUID, etapa: EtapaUpdate, user: dict = Depends(get_cu
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
         
-    data = etapa.model_dump(exclude_unset=True)
+    data = etapa.model_dump(mode="json", exclude_unset=True)
     data["updated_at"] = datetime.now().isoformat()
-    
-    for field in ["data_prevista_inicio", "data_prevista_fim", "data_real_inicio", "data_real_fim"]:
-        if field in data and data[field]:
-            data[field] = data[field].isoformat()
 
-    res = supabase.table("etapas").update(data).eq("id", str(id)).execute()
-    if res.data:
-        return res.data[0]
-    raise HTTPException(status_code=404, detail="Etapa não encontrada")
+    try:
+        res = supabase.table("etapas").update(data).eq("id", str(id)).execute()
+        if res.data:
+            return res.data[0]
+        raise HTTPException(status_code=404, detail="Etapa não encontrada")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar etapa: {str(e)}")
+
+@router.delete("/etapas/{id}")
+async def delete_etapa(id: UUID, user: dict = Depends(get_current_user)):
+    """Exclui uma etapa."""
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+        
+    try:
+        supabase.table("etapas").delete().eq("id", str(id)).execute()
+        return {"message": "Etapa excluída com sucesso"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir etapa: {str(e)}")
 
 @router.get("/checklists", response_model=List[dict])
 async def list_checklists(etapa_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
@@ -95,10 +109,47 @@ async def create_checklist(checklist: ChecklistCreate, user: dict = Depends(get_
     if not supabase:
         raise HTTPException(status_code=500, detail="Database connection not available")
         
-    data = checklist.model_dump()
-    data["created_by"] = None if user.get("is_mock") else user.get("id")
-    # Pydantic models parse nested lists of models to dicts, but let's ensure it's serializable to JSON
-    # Supabase python client handles it well if it's a list of dicts.
+    data = checklist.model_dump(mode="json")
+    user_id = user.get("id")
+    data["created_by"] = None if user.get("is_mock") else (str(user_id) if user_id else None)
     
-    res = supabase.table("checklists").insert(data).execute()
-    return res.data[0]
+    try:
+        res = supabase.table("checklists").insert(data).execute()
+        if res.data:
+            return res.data[0]
+        raise HTTPException(status_code=400, detail="Falha ao criar checklist.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar checklist: {str(e)}")
+
+@router.put("/checklists/{id}", response_model=dict)
+async def update_checklist(id: UUID, checklist: ChecklistUpdate, user: dict = Depends(get_current_user)):
+    """Atualiza itens de um checklist."""
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+        
+    data = checklist.model_dump(mode="json", exclude_unset=True)
+    try:
+        res = supabase.table("checklists").update(data).eq("id", str(id)).execute()
+        if res.data:
+            return res.data[0]
+        raise HTTPException(status_code=404, detail="Checklist não encontrado")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar checklist: {str(e)}")
+
+@router.delete("/checklists/{id}")
+async def delete_checklist(id: UUID, user: dict = Depends(get_current_user)):
+    """Exclui um checklist."""
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection not available")
+        
+    try:
+        supabase.table("checklists").delete().eq("id", str(id)).execute()
+        return {"message": "Checklist excluído com sucesso"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir checklist: {str(e)}")

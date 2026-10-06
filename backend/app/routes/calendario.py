@@ -422,6 +422,15 @@ async def create_alocacao(alocacao: AlocacaoBase, user: dict = Depends(get_curre
     except Exception as ce:
         logger.warning(f"Erro ao verificar conflito de alocação: {ce}")
 
+    # Se valor_diaria não foi informado e modalidade é diária, usa valor cadastrado do colaborador
+    if data.get("modalidade_pagamento") == "diaria" and not data.get("valor_diaria"):
+        try:
+            func = supabase.table("funcionarios").select("valor_diaria").eq("id", data["funcionario_id"]).single().execute()
+            if func.data and func.data.get("valor_diaria") is not None:
+                data["valor_diaria"] = func.data["valor_diaria"]
+        except Exception as fe:
+            logger.warning(f"Não foi possível buscar valor_diaria padrão do funcionário: {fe}")
+
     try:
         res = supabase.table("calendario_alocacoes").insert(data).execute()
         if res.data:

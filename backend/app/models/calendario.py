@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import date, datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from uuid import UUID
 
 class ProfissaoBase(BaseModel):
@@ -30,6 +30,13 @@ class FuncionarioBase(BaseModel):
     valor_diaria: Optional[float] = None
     profissoes_ids: Optional[List[UUID]] = None
 
+    @field_validator("valor_diaria", mode="before")
+    @classmethod
+    def parse_valor_diaria(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
 class FuncionarioUpdate(BaseModel):
     nome: Optional[str] = None
     cargo: Optional[str] = None
@@ -42,6 +49,13 @@ class FuncionarioUpdate(BaseModel):
     equipe_padrao_id: Optional[UUID] = None
     valor_diaria: Optional[float] = None
     profissoes_ids: Optional[List[UUID]] = None
+
+    @field_validator("valor_diaria", mode="before")
+    @classmethod
+    def parse_valor_diaria(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 class FuncionarioResponse(FuncionarioBase):
     id: UUID
@@ -58,6 +72,13 @@ class AlocacaoBase(BaseModel):
     valor_diaria: Optional[float] = None
     valor_fechado: Optional[float] = None
 
+    @field_validator("valor_diaria", "valor_fechado", mode="before")
+    @classmethod
+    def parse_empty_floats(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
 class AlocacaoUpdate(BaseModel):
     obra_id: Optional[UUID] = None
     funcionario_id: Optional[UUID] = None
@@ -67,6 +88,13 @@ class AlocacaoUpdate(BaseModel):
     modalidade_pagamento: Optional[str] = None
     valor_diaria: Optional[float] = None
     valor_fechado: Optional[float] = None
+
+    @field_validator("valor_diaria", "valor_fechado", mode="before")
+    @classmethod
+    def parse_empty_floats(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 class AlocacaoResponse(AlocacaoBase):
     id: UUID
@@ -87,6 +115,13 @@ class PagamentoFuncionarioBase(BaseModel):
     modalidade: str = Field(..., description="diaria, fechado")
     data_pagamento: date
     valor_pago: float
+
+    @field_validator("valor_pago", mode="before")
+    @classmethod
+    def parse_valor_pago(cls, v):
+        if v == "" or v is None:
+            return 0.0
+        return v
 
 class PagamentoFuncionarioResponse(PagamentoFuncionarioBase):
     id: UUID
