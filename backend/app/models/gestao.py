@@ -11,6 +11,7 @@ class EmpreiteiroBase(BaseModel):
     area_atuacao: Optional[str] = Field(None, max_length=100)
     endereco: Optional[str] = None
     ativo: bool = True
+    pix: Optional[str] = Field(None, max_length=100)
 
 class EmpreiteiroUpdate(BaseModel):
     nome: Optional[str] = None
@@ -20,6 +21,7 @@ class EmpreiteiroUpdate(BaseModel):
     area_atuacao: Optional[str] = None
     endereco: Optional[str] = None
     ativo: Optional[bool] = None
+    pix: Optional[str] = None
 
 class EmpreiteiroResponse(EmpreiteiroBase):
     id: UUID

@@ -7,7 +7,7 @@ import {
 import api from '../services/api';
 import { formatTelefone, formatCPFouCNPJ } from '../utils/masks';
 
-export default function GestaoPage({ obras = [], user }) {
+export default function GestaoPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('terceiros'); // 'terceiros' | 'contratos'
   const [contratoStatusFilter, setContratoStatusFilter] = useState('ativos');
   const [contratos, setContratos] = useState([]);
@@ -38,16 +38,18 @@ export default function GestaoPage({ obras = [], user }) {
     cpf_cnpj: '',
     email: '',
     endereco: '',
+    pix: '',
     ativo: true
   };
   const [empForm, setEmpForm] = useState(initialEmpForm);
 
   const initialContratoData = {
-    obra_id: '',
+    obra_id: selectedObraId || '',
     empreiteiro_id: '',
     tipo_contrato: 'por_medicao',
     valor_total: '',
-    data_servico: '',
+    data_assinatura: '',
+    data_termino: '',
     escopo: ''
   };
   const [contratoData, setContratoData] = useState(initialContratoData);
@@ -73,7 +75,7 @@ export default function GestaoPage({ obras = [], user }) {
     setIsLoading(true);
     try {
       const [resContratos, resEmp] = await Promise.all([
-        api.get('/gestao/contratos'),
+        api.get(`/gestao/contratos${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`),
         api.get('/gestao/empreiteiros')
       ]);
       setContratos(resContratos.data || []);
@@ -88,7 +90,7 @@ export default function GestaoPage({ obras = [], user }) {
 
   useEffect(() => {
     fetchDados();
-  }, []);
+  }, [selectedObraId]);
 
   const formatMoney = (val) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -170,7 +172,8 @@ export default function GestaoPage({ obras = [], user }) {
     try {
       const payload = {
         ...contratoData,
-        data_servico: contratoData.data_servico || null,
+        data_assinatura: contratoData.data_assinatura || null,
+        data_termino: contratoData.data_termino || null,
         valor_total: parseFloat(String(contratoData.valor_total || 0).replace(',', '.')) || 0
       };
       await api.post('/gestao/contratos', payload);
@@ -911,19 +914,29 @@ export default function GestaoPage({ obras = [], user }) {
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
                     />
                   </div>
-                </div>
+                </div>                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Endereço / Cidade</label>
+                    <input 
+                      type="text" 
+                      placeholder="Rua, Bairro, Cidade..."
+                      value={empForm.endereco} 
+                      onChange={e => setEmpForm({...empForm, endereco: e.target.value})} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
+                    />
+                  </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Endereço / Cidade</label>
-                  <input 
-                    type="text" 
-                    placeholder="Rua, Bairro, Cidade..."
-                    value={empForm.endereco} 
-                    onChange={e => setEmpForm({...empForm, endereco: e.target.value})} 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
-                  />
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Chave Pix</label>
+                    <input 
+                      type="text" 
+                      placeholder="CPF, E-mail, Telefone ou Aleatória"
+                      value={empForm.pix} 
+                      onChange={e => setEmpForm({...empForm, pix: e.target.value})} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none font-mono" 
+                    />
+                  </div>
                 </div>
-
                 <div className="flex items-center gap-2 pt-2">
                   <label className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none">
                     <input 
@@ -1075,14 +1088,27 @@ export default function GestaoPage({ obras = [], user }) {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data do Serviço (Calendário)</label>
-                  <input 
-                    type="date" 
-                    value={contratoData.data_servico} 
-                    onChange={e => setContratoData({...contratoData, data_servico: e.target.value})} 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data de Assinatura (Início) *</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={contratoData.data_assinatura} 
+                      onChange={e => setContratoData({...contratoData, data_assinatura: e.target.value})} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Data Prevista de Término *</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={contratoData.data_termino} 
+                      onChange={e => setContratoData({...contratoData, data_termino: e.target.value})} 
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:border-emerald-500 focus:outline-none" 
+                    />
+                  </div>
                 </div>
 
                 <div>

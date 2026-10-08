@@ -7,6 +7,7 @@ from .routes import (
     auth_router,
     obras_router,
     servicos_router,
+    materiais_router,
     financeiro_router,
     rdo_router,
     cronograma_router,
@@ -48,6 +49,7 @@ API_PREFIX = "/api/v1"
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(obras_router, prefix=API_PREFIX)
 app.include_router(servicos_router, prefix=API_PREFIX)
+app.include_router(materiais_router, prefix=API_PREFIX)
 app.include_router(financeiro_router, prefix=API_PREFIX)
 app.include_router(rdo_router, prefix=API_PREFIX)
 app.include_router(cronograma_router, prefix=API_PREFIX)

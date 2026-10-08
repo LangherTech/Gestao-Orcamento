@@ -168,7 +168,35 @@ async def create_pagamento(pag: PagamentoTerceiroCreate, user: dict = Depends(ge
     }
     
     res = supabase.table("medicoes_empreiteiro").insert(db_data).execute()
-    return res.data[0]
+    if res.data:
+        medicao = res.data[0]
+        
+        # Injeta no fluxo de caixa pequeno (Custo da Obra)
+        try:
+            contrato_res = supabase.table("contratos_empreiteiro").select("obra_id, empreiteiros(nome)").eq("id", db_data["contrato_id"]).single().execute()
+            if contrato_res.data:
+                obra_id = contrato_res.data.get("obra_id")
+                empreiteiro_nome = contrato_res.data.get("empreiteiros", {}).get("nome", "Terceiro") if contrato_res.data.get("empreiteiros") else "Terceiro"
+                
+                caixa_data = {
+                    "obra_id": obra_id,
+                    "tipo": "despesa",
+                    "categoria": "Terceirizados",
+                    "descricao": f"Pagamento Terceiro: {empreiteiro_nome}",
+                    "valor": db_data["valor_pagar"],
+                    "data_registro": db_data["data_medicao"],
+                    "status": "realizado",
+                    "metodo_pagamento": db_data.get("tipo_pagamento", "Transferência"),
+                    "referencia_id": medicao["id"]
+                }
+                if not user.get("is_mock"):
+                    caixa_data["created_by"] = user.get("id")
+                supabase.table("caixa_pequeno").insert(caixa_data).execute()
+        except Exception as e:
+            pass # Apenas ignora falha silenciosa de caixa para nao falhar o pagamento base
+
+        return medicao
+    raise HTTPException(status_code=400, detail="Erro ao registrar pagamento")
 
 @router.patch("/contratos/{id}/status", response_model=dict)
 async def update_contrato_status(id: UUID, status_data: dict, user: dict = Depends(get_current_user)):
@@ -194,5 +222,8 @@ async def delete_contrato(id: UUID, user: dict = Depends(get_current_user)):
 @router.delete("/pagamentos/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_pagamento(id: UUID, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
+    # Primeiro deleta do caixa pequeno (Estorno)
+    supabase.table("caixa_pequeno").delete().eq("referencia_id", str(id)).execute()
+    # Em seguida deleta a medição
     supabase.table("medicoes_empreiteiro").delete().eq("id", str(id)).execute()
     return None

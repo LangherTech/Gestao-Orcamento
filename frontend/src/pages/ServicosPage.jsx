@@ -7,7 +7,7 @@ import {
   Building2, Check, Clock, Send, XCircle, Phone, Mail, RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
-import { PropostaComercialPreviewModal, printPropostaComercial } from '../components/PropostaComercialView';
+import { PropostaComercialPreviewModal, printPropostaComercial, printListaMateriais } from '../components/PropostaComercialView';
 import AssistenteDrywallModal from '../components/AssistenteDrywallModal';
 
 
@@ -25,6 +25,35 @@ const CATEGORIAS_PADRAO = [
   'Impermeabilização',
   'Esquadrias',
   'Cobertura',
+  'Drywall',
+  'Alvenaria',
+];
+
+const UNIDADES_SERVICO = [
+  { value: 'm²', label: 'm² — Metro Quadrado' },
+  { value: 'ml', label: 'ml — Metro Linear' },
+  { value: 'm³', label: 'm³ — Metro Cúbico' },
+  { value: 'un', label: 'un — Unidade' },
+  { value: 'vb', label: 'vb — Verba / Global' },
+  { value: 'pt', label: 'pt — Ponto' },
+  { value: 'dia', label: 'dia — Diária' },
+  { value: 'hr', label: 'hr — Hora' },
+  { value: 'kg', label: 'kg — Quilograma' },
+  { value: 'cj', label: 'cj — Conjunto' },
+];
+
+const UNIDADES_INSUMO_PADRAO = [
+  { value: 'M²', label: 'M² — Metro Quadrado' },
+  { value: 'Ml', label: 'Ml — Metro Linear' },
+  { value: 'M³', label: 'M³ — Metro Cúbico' },
+  { value: 'Un', label: 'Un — Unidade' },
+  { value: 'Kg', label: 'Kg — Quilograma' },
+  { value: 'Sc', label: 'Sc — Saco' },
+  { value: 'Lt', label: 'Lt — Litro / Lata' },
+  { value: 'Br', label: 'Br — Barra' },
+  { value: 'Rl', label: 'Rl — Rolo' },
+  { value: 'Cx', label: 'Cx — Caixa' },
+  { value: 'Vb', label: 'Vb — Verba' },
 ];
 
 const UNIDADES_INSUMO = [
@@ -56,8 +85,7 @@ const FALLBACK_SERVICOS = [
     categoria: 'Gesso e Drywall',
     preco_total: 145.00,
     margem_lucro: 25.00,
-    mao_de_obra: 45.00,
-    servico_materiais: []
+    mao_de_obra: 45.00
   },
   {
     id: 's002',
@@ -67,8 +95,7 @@ const FALLBACK_SERVICOS = [
     categoria: 'Pintura e Acabamento',
     preco_total: 35.00,
     margem_lucro: 30.00,
-    mao_de_obra: 22.00,
-    servico_materiais: []
+    mao_de_obra: 22.00
   },
   {
     id: 's003',
@@ -78,8 +105,7 @@ const FALLBACK_SERVICOS = [
     categoria: 'Pisos e Revestimentos',
     preco_total: 85.00,
     margem_lucro: 20.00,
-    mao_de_obra: 55.00,
-    servico_materiais: []
+    mao_de_obra: 55.00
   }
 ];
 
@@ -180,11 +206,8 @@ function Toast({ message, type = 'success', onClose }) {
 // Card de Serviço
 // ========================================
 function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) {
-  const [expanded, setExpanded] = useState(false);
-  const materiais = servico.servico_materiais || [];
-  const custoMateriais = materiais.reduce((sum, m) => sum + (m.subtotal || m.quantidade * m.preco_unitario || 0), 0);
   const custoTerceiro = Number(servico.mao_de_obra) || 0;
-  const custoTotal = custoMateriais + custoTerceiro;
+  const custoTotal = custoTerceiro;
   const precoVenda = Number(servico.preco_total) || 0;
   const lucroBruto = precoVenda - custoTotal;
   const margemReal = precoVenda > 0 ? (lucroBruto / precoVenda) * 100 : Number(servico.margem_lucro) || 0;
@@ -228,10 +251,7 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
               <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Custo Terceiro</span>
               <span className="text-sm font-semibold text-slate-200">{formatCurrency(custoTerceiro)}</span>
             </div>
-            <div>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Materiais</span>
-              <span className="text-sm font-semibold text-amber-300">{formatCurrency(custoMateriais)}</span>
-            </div>
+
             <div>
               <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Lucro Bruto</span>
               <span className={`text-sm font-bold ${lucroBruto >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -246,15 +266,7 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
         </div>
 
         {/* Ações */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800/60">
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-          >
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            <Package className="w-3.5 h-3.5" />
-            <span>{materiais.length} insumo{materiais.length !== 1 ? 's' : ''} na composição</span>
-          </button>
+        <div className="flex items-center justify-end mt-4 pt-3 border-t border-slate-800/60">
           <div className="flex items-center gap-1">
             <button onClick={() => onDuplicate(servico)} className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer" title="Duplicar">
               <Copy className="w-3.5 h-3.5" />
@@ -268,60 +280,6 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
           </div>
         </div>
       </div>
-
-      {/* Composição de Materiais (Expandível) */}
-      {expanded && materiais.length > 0 && (
-        <div className="border-t border-slate-800/60 bg-slate-900/30 px-5 py-4">
-          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Composição de Insumos
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-slate-500 uppercase tracking-wider">
-                  <th className="text-left py-2 pr-4 font-semibold">Material</th>
-                  <th className="text-center py-2 px-3 font-semibold">Unidade</th>
-                  <th className="text-center py-2 px-3 font-semibold">Qtde</th>
-                  <th className="text-center py-2 px-3 font-semibold">Rend.</th>
-                  <th className="text-right py-2 px-3 font-semibold">Preço Unit.</th>
-                  <th className="text-right py-2 pl-3 font-semibold">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {materiais.map((m, idx) => (
-                  <tr key={m.id || idx} className="border-t border-slate-800/40 text-slate-300">
-                    <td className="py-2 pr-4 font-medium text-white">
-                      {m.materiais?.nome || m.material_nome || 'Material'}
-                    </td>
-                    <td className="py-2 px-3 text-center text-slate-400">
-                      {m.materiais?.unidade || m.material_unidade || '-'}
-                    </td>
-                    <td className="py-2 px-3 text-center">{m.quantidade}</td>
-                    <td className="py-2 px-3 text-center">{m.rendimento}x</td>
-                    <td className="py-2 px-3 text-right">{formatCurrency(m.preco_unitario)}</td>
-                    <td className="py-2 pl-3 text-right font-semibold text-emerald-400">
-                      {formatCurrency(m.subtotal || m.quantidade * m.preco_unitario)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-slate-700">
-                  <td colSpan={5} className="py-2 pr-3 text-right font-bold text-slate-300 uppercase text-[11px]">Total Insumos:</td>
-                  <td className="py-2 pl-3 text-right font-bold text-emerald-400">{formatCurrency(custoMateriais)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {expanded && materiais.length === 0 && (
-        <div className="border-t border-slate-800/60 bg-slate-900/30 px-5 py-6 text-center">
-          <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-          <p className="text-xs text-slate-500">Nenhum insumo vinculado a este serviço.</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -329,41 +287,26 @@ function ServicoCard({ servico, onEdit, onDelete, onDuplicate, onViewDetails }) 
 // ========================================
 // Formulário de Serviço (Criar/Editar)
 // ========================================
-function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
+function ServicoForm({ servico, onSave, onCancel, isLoading }) {
   const [form, setForm] = useState({
     nome: '',
     descricao: '',
     categoria: '',
-    unidade: 'Un',
+    unidade: 'm²',
     preco_total: 0,
     margem_lucro: 0,
     mao_de_obra: 0,
     ...servico,
   });
-  const [composicao, setComposicao] = useState(
-    servico?.servico_materiais?.map(sm => ({
-      material_id: sm.material_id,
-      quantidade: sm.quantidade,
-      rendimento: sm.rendimento,
-      preco_unitario: sm.preco_unitario,
-      material_nome: sm.materiais?.nome || sm.material_nome || '',
-    })) || []
-  );
-  const [showAddMaterial, setShowAddMaterial] = useState(false);
-  const [materialSearch, setMaterialSearch] = useState('');
-  const [showNewMaterial, setShowNewMaterial] = useState(false);
-  const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
-  const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'Ml', preco_medio: '' });
-  const [savingMaterial, setSavingMaterial] = useState(false);
-  const [localMateriais, setLocalMateriais] = useState(materiais);
 
-  // Cálculos reativos em tempo real
-  const custoMateriais = useMemo(() => {
-    return composicao.reduce((sum, m) => sum + ((Number(m.quantidade) || 0) * (Number(m.preco_unitario) || 0)), 0);
-  }, [composicao]);
+  const isCustomUnitInit = Boolean(
+    servico?.unidade &&
+    !UNIDADES_SERVICO.some(u => u.value.toLowerCase() === String(servico.unidade).toLowerCase())
+  );
+  const [customUnidadeMode, setCustomUnidadeMode] = useState(isCustomUnitInit);
 
   const custoTerceiro = Number(form.mao_de_obra) || 0;
-  const custoTotalDireto = custoMateriais + custoTerceiro;
+  const custoTotalDireto = custoTerceiro;
   const precoVenda = Number(form.preco_total) || 0;
   const lucroBruto = precoVenda - custoTotalDireto;
   const margemSobreVenda = precoVenda > 0 ? (lucroBruto / precoVenda) * 100 : 0;
@@ -372,7 +315,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   // Handlers bidirecionais
   const handleMaoDeObraChange = (val) => {
     const valNum = parseFloat(val) || 0;
-    const novoCustoTotal = custoMateriais + valNum;
+    const novoCustoTotal = valNum;
     setForm(prev => {
       const pv = Number(prev.preco_total) || 0;
       let novaMargem = Number(prev.margem_lucro) || 0;
@@ -390,7 +333,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   const handlePrecoVendaChange = (val) => {
     const valNum = parseFloat(val) || 0;
     setForm(prev => {
-      const ct = custoMateriais + (Number(prev.mao_de_obra) || 0);
+      const ct = (Number(prev.mao_de_obra) || 0);
       const novaMargem = valNum > 0 ? Math.round(((valNum - ct) / valNum) * 1000) / 10 : 0;
       return {
         ...prev,
@@ -403,7 +346,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   const handleMargemChange = (val) => {
     const valNum = parseFloat(val) || 0;
     setForm(prev => {
-      const ct = custoMateriais + (Number(prev.mao_de_obra) || 0);
+      const ct = (Number(prev.mao_de_obra) || 0);
       let novoPreco = prev.preco_total;
       if (valNum < 100 && ct > 0) {
         novoPreco = Math.round((ct / (1 - (valNum / 100))) * 100) / 100;
@@ -417,7 +360,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
   };
 
   const handleApplyMarkup = (markupPercent) => {
-    const ct = custoMateriais + (Number(form.mao_de_obra) || 0);
+    const ct = (Number(form.mao_de_obra) || 0);
     const novoPreco = Math.round(ct * (1 + markupPercent / 100) * 100) / 100;
     const novaMargem = novoPreco > 0 ? Math.round(((novoPreco - ct) / novoPreco) * 1000) / 10 : 0;
     setForm(prev => ({
@@ -427,80 +370,8 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
     }));
   };
 
-  
-  const handleAddAssistenteInsumos = (insumosList) => {
-    // Generate unique negative IDs for items that aren't exactly in catalog to distinguish
-    const novosItens = insumosList.map((ins, idx) => ({
-      servico_id: null,
-      material_id: -(Date.now() + idx), // ID temporário
-      tipo: 'insumo',
-      servico_nome: ins.papel,
-      preco_unitario: Number(ins.precoBase) || 0,
-      quantidade: ins.qtd,
-      desconto_percentual: 0,
-      fornecido_por: ins.fornecidoPor
-    }));
-    setItens(prev => [...prev, ...novosItens]);
-    setShowAssistenteDrywall(false);
-  };
-
-  const handleAddMaterial = (material) => {
-    setComposicao(prev => [...prev, {
-      material_id: material.id,
-      quantidade: 1,
-      rendimento: 1,
-      preco_unitario: material.preco_medio || 0,
-      material_nome: material.nome,
-    }]);
-    setShowAddMaterial(false);
-    setMaterialSearch('');
-  };
-
-  const handleRemoveMaterial = (idx) => {
-    setComposicao(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleUpdateComposicao = (idx, field, value) => {
-    setComposicao(prev => prev.map((m, i) => i === idx ? { ...m, [field]: parseFloat(value) || 0 } : m));
-  };
-
   const handleSubmit = () => {
-    const payload = {
-      ...form,
-      materiais: composicao.map(c => ({
-        material_id: c.material_id,
-        quantidade: c.quantidade,
-        rendimento: c.rendimento,
-        preco_unitario: c.preco_unitario,
-      })),
-    };
-    onSave(payload);
-  };
-
-  const filteredMateriais = localMateriais.filter(m =>
-    m.nome.toLowerCase().includes(materialSearch.toLowerCase()) &&
-    !composicao.find(c => c.material_id === m.id)
-  );
-
-  const handleCreateMaterial = async () => {
-    if (!newMaterial.nome.trim()) return;
-    setSavingMaterial(true);
-    try {
-      const res = await api.post('/servicos/materiais', {
-        nome: newMaterial.nome.trim(),
-        unidade: newMaterial.unidade.trim() || 'Un',
-        preco_medio: parseFloat(String(newMaterial.preco_medio).replace(',', '.')) || 0,
-      });
-      const created = res.data;
-      setLocalMateriais(prev => [...prev, created]);
-      handleAddMaterial(created);
-      setNewMaterial({ nome: '', unidade: 'Ml', preco_medio: '' });
-      setShowNewMaterial(false);
-    } catch (err) {
-      console.error('Erro ao criar material', err);
-    } finally {
-      setSavingMaterial(false);
-    }
+    onSave(form);
   };
 
   return (
@@ -536,17 +407,60 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
           <label className="block text-xs font-semibold text-slate-400 mb-1.5">
             Unidade de Medida
           </label>
-          <input
-            list="unidades-list-servico"
-            value={form.unidade || "Un"}
-            onChange={(e) => setForm({ ...form, unidade: e.target.value })}
-            className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all cursor-pointer font-semibold"
-            placeholder="Selecione ou digite..."
-          />
-          <datalist id="unidades-list-servico">
-            {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => <option key={u} value={u} />)}
-          </datalist>
-          <span className="text-[10px] text-slate-500 mt-1 block">ML unifica M e ML (metro linear). Digite para unidade livre.</span>
+          {customUnidadeMode ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={form.unidade || ''}
+                onChange={(e) => setForm({ ...form, unidade: e.target.value })}
+                className="flex-1 bg-slate-800/60 border border-emerald-500/50 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                placeholder="Ex: kit, par, cx..."
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomUnidadeMode(false);
+                  setForm({ ...form, unidade: 'm²' });
+                }}
+                className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl transition-all font-medium"
+                title="Voltar para a lista padrão"
+              >
+                Lista
+              </button>
+            </div>
+          ) : (
+            <select
+              value={
+                UNIDADES_SERVICO.some(u => u.value.toLowerCase() === (form.unidade || '').toLowerCase())
+                  ? UNIDADES_SERVICO.find(u => u.value.toLowerCase() === (form.unidade || '').toLowerCase()).value
+                  : '__custom__'
+              }
+              onChange={(e) => {
+                if (e.target.value === '__custom__') {
+                  setCustomUnidadeMode(true);
+                  setForm({ ...form, unidade: '' });
+                } else {
+                  setForm({ ...form, unidade: e.target.value });
+                }
+              }}
+              className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all cursor-pointer font-semibold"
+            >
+              {UNIDADES_SERVICO.map(u => (
+                <option key={u.value} value={u.value} className="bg-slate-900 text-white py-1">
+                  {u.label}
+                </option>
+              ))}
+              <option value="__custom__" className="bg-slate-900 text-emerald-400 py-1">
+                + Outra unidade (personalizada)...
+              </option>
+            </select>
+          )}
+          <span className="text-[10px] text-slate-500 mt-1 block">
+            {customUnidadeMode 
+              ? 'Digite a sigla da unidade desejada ou clique em "Lista" para voltar.' 
+              : 'Selecione a unidade padrão ou escolha uma personalizada.'}
+          </span>
         </div>
 
         <div className="md:col-span-2">
@@ -663,11 +577,6 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
           <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
-            <span className="text-slate-400 block text-[11px] mb-1">Materiais</span>
-            <span className="text-amber-300 font-bold text-sm">{formatCurrency(custoMateriais)}</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/50">
             <span className="text-slate-400 block text-[11px] mb-1">Mão de Obra (Terceiro)</span>
             <span className="text-blue-400 font-bold text-sm">{formatCurrency(custoTerceiro)}</span>
           </div>
@@ -694,200 +603,6 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
         </div>
       </div>
 
-      {/* Composição de Materiais */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-bold text-white">Composição de Insumos ({composicao.length})</span>
-          </div>
-          <button
-            onClick={() => setShowAddMaterial(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 transition-all cursor-pointer"
-          >
-            <Plus className="w-3 h-3" />
-            Adicionar Insumo
-          </button>
-        </div>
-
-        {composicao.length > 0 ? (
-          <div className="space-y-2">
-            {composicao.map((m, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/60">
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-white truncate block">{m.material_nome}</span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div>
-                    <label className="text-[10px] text-slate-500 block">Qtde</label>
-                    <input
-                      type="number" step="0.01" min="0.01"
-                      value={m.quantidade}
-                      onChange={(e) => handleUpdateComposicao(idx, 'quantidade', e.target.value)}
-                      className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block">Rend.</label>
-                    <input
-                      type="number" step="0.1" min="0.1"
-                      value={m.rendimento}
-                      onChange={(e) => handleUpdateComposicao(idx, 'rendimento', e.target.value)}
-                      className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block">R$ Unit.</label>
-                    <input
-                      type="number" step="0.01" min="0"
-                      value={m.preco_unitario}
-                      onChange={(e) => handleUpdateComposicao(idx, 'preco_unitario', e.target.value)}
-                      className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                    />
-                  </div>
-                  <div className="text-right min-w-[80px]">
-                    <label className="text-[10px] text-slate-500 block">Subtotal</label>
-                    <span className="text-xs font-semibold text-emerald-400">
-                      {formatCurrency(m.quantidade * m.preco_unitario)}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveMaterial(idx)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 rounded-xl bg-slate-900/20 border border-dashed border-slate-700 text-center">
-            <Package className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-            <p className="text-xs text-slate-500">Clique em "Adicionar Insumo" para compor este serviço</p>
-          </div>
-        )}
-
-        {/* Lista de materiais para adicionar */}
-        {showAddMaterial && (
-          <div className="mt-3 p-4 rounded-xl bg-slate-900/60 border border-slate-700/60">
-            {!showNewMaterial ? (
-              <>
-                <div className="flex items-center gap-2 mb-3">
-                  <Search className="w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={materialSearch}
-                    onChange={(e) => setMaterialSearch(e.target.value)}
-                    placeholder="Buscar insumo..."
-                    className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
-                    autoFocus
-                  />
-                  <button onClick={() => { setShowAddMaterial(false); setMaterialSearch(''); }} className="text-slate-400 hover:text-white cursor-pointer">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {filteredMateriais.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleAddMaterial(m)}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-800/60 transition-colors text-left cursor-pointer"
-                    >
-                      <div>
-                        <span className="text-sm text-white font-medium">{m.nome}</span>
-                        <span className="text-[10px] text-slate-400 ml-2">({m.unidade})</span>
-                      </div>
-                      <span className="text-xs text-emerald-400 font-semibold">{formatCurrency(m.preco_medio)}</span>
-                    </button>
-                  ))}
-                  {filteredMateriais.length === 0 && (
-                    <p className="text-xs text-slate-500 text-center py-3">Nenhum insumo encontrado</p>
-                  )}
-                </div>
-                <div className="pt-3 mt-3 border-t border-slate-800">
-                  <button
-                    onClick={() => setShowNewMaterial(true)}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Cadastrar novo insumo
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-bold text-white flex items-center gap-2">
-                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                    Novo Insumo
-                  </span>
-                  <button onClick={() => setShowNewMaterial(false)} className="text-slate-400 hover:text-white cursor-pointer">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Nome do Insumo *</label>
-                  <input
-                    type="text"
-                    value={newMaterial.nome}
-                    onChange={(e) => setNewMaterial(p => ({ ...p, nome: e.target.value }))}
-                    placeholder="Ex: Placa Drywall ST 12.5mm"
-                    autoFocus
-                    className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Unidade</label>
-                    <input
-                      list="unidades-list-avulso"
-                      value={newMaterial.unidade}
-                      onChange={(e) => setNewMaterial(p => ({ ...p, unidade: e.target.value }))}
-                      className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                      placeholder="Ex: ML, Unidade, Saco..."
-                    />
-                    <datalist id="unidades-list-avulso">
-                      {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => (
-                        <option key={u} value={u} />
-                      ))}
-                    </datalist>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Preço Médio (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newMaterial.preco_medio}
-                      onChange={(e) => setNewMaterial(p => ({ ...p, preco_medio: e.target.value }))}
-                      placeholder="0.00"
-                      className="w-full bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => setShowNewMaterial(false)}
-                    className="flex-1 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 bg-slate-800/40 hover:bg-slate-800 border border-slate-700/60 transition-all cursor-pointer"
-                  >
-                    Voltar
-                  </button>
-                  <button
-                    onClick={handleCreateMaterial}
-                    disabled={!newMaterial.nome.trim() || savingMaterial}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <Save className="w-3 h-3" />
-                    {savingMaterial ? 'Salvando...' : 'Salvar e Adicionar'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Botões */}
       <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
         <button
@@ -902,7 +617,7 @@ function ServicoForm({ servico, materiais, onSave, onCancel, isLoading }) {
           className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          {servico ? 'Salvar Alterações' : 'Criar Serviço'}
+          {servico?.id ? 'Salvar Alterações' : 'Criar Serviço'}
         </button>
       </div>
     </div>
@@ -923,9 +638,11 @@ function OrcamentoModal({
   onMaterialCreated,
   onRefreshCatalog = null,
   initialOrcamento = null,
-  readOnlyView = false
+  readOnlyView = false,
+  user = null
 }) {
   const [itens, setItens] = useState([]);
+  const [assistenteMergeState, setAssistenteMergeState] = useState(null);
   const [clienteNome, setClienteNome] = useState('');
   const [pessoaContato, setPessoaContato] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
@@ -943,6 +660,7 @@ function OrcamentoModal({
   const [margemBdiPercentual, setMargemBdiPercentual] = useState(15.0);
   const [impostosPercentual, setImpostosPercentual] = useState(20.5);
   const [modoExibicao, setModoExibicao] = useState('resumido');
+  const [fornecimentoMateriais, setFornecimentoMateriais] = useState('edifica');
   const [step, setStep] = useState(1); // 1: edição/seleção, 2: preview/PDF
   const [saving, setSaving] = useState(false);
   const [autoSaving, setAutoSaving] = useState(false);
@@ -953,7 +671,7 @@ function OrcamentoModal({
   const [itemSearchTerm, setItemSearchTerm] = useState('');
   const [itemFilterType, setItemFilterType] = useState('todos'); // 'todos', 'servicos', 'insumos'
 
-  // Novo Insumo
+  // Novo Material
   const [showNewMaterial, setShowNewMaterial] = useState(false);
   const [showAssistenteDrywall, setShowAssistenteDrywall] = useState(false);
   const [newMaterial, setNewMaterial] = useState({ nome: '', unidade: 'Ml', preco_medio: '' });
@@ -999,6 +717,7 @@ function OrcamentoModal({
       setMargemBdiPercentual(initialOrcamento.margem_bdi_percentual ?? 15.0);
       setImpostosPercentual(initialOrcamento.impostos_percentual ?? 20.5);
       setModoExibicao(initialOrcamento.modo_exibicao || 'resumido');
+      setFornecimentoMateriais(initialOrcamento.fornecimento_materiais || 'edifica');
       setItens(
         (initialOrcamento.orcamento_itens || initialOrcamento.itens || []).map(it => ({
           servico_id: it.servico_id,
@@ -1013,6 +732,7 @@ function OrcamentoModal({
       setStep(readOnlyView ? 2 : 1);
     } else {
       setClienteNome('');
+      setPessoaContato('');
       setClienteTelefone('');
       setClienteEmail('');
       setClienteEndereco('BLUMENAU / SC');
@@ -1028,9 +748,13 @@ function OrcamentoModal({
       setMargemBdiPercentual(15.0);
       setImpostosPercentual(20.5);
       setModoExibicao('resumido');
+      setFornecimentoMateriais('edifica');
       setItens([]);
       setStep(1);
       setCurrentId(null);
+      setItemSearchTerm('');
+      setItemFilterType('todos');
+      setAssistenteMergeState(null);
     }
     setErrorMsg('');
   }, [initialOrcamento, readOnlyView, isOpen]);
@@ -1053,8 +777,19 @@ function OrcamentoModal({
   };
 
   
-  const handleAddAssistenteInsumos = (insumosList) => {
-    const novosItens = insumosList.map((ins, idx) => ({
+  const handleAddAssistenteMateriais = (insumosList) => {
+    // 1. Consolida os materiais que vieram do assistente
+    const consolidado = {};
+    insumosList.forEach(ins => {
+      const id = ins.material_id;
+      if (!id) return;
+      if (!consolidado[id]) {
+        consolidado[id] = { ...ins };
+      } else {
+        consolidado[id].qtd_compra += ins.qtd_compra;
+      }
+    });
+    const itensConsolidados = Object.values(consolidado).map(ins => ({
       servico_id: null,
       material_id: ins.material_id,
       tipo: 'insumo',
@@ -1065,7 +800,37 @@ function OrcamentoModal({
       unidade: ins.unidade,
       fornecido_por: ins.fornecido_por || 'Edifica'
     }));
-    setItens(prev => [...prev, ...novosItens]);
+
+    // 2. Verifica se algum já existe no orçamento
+    const idsNoOrcamento = new Set(itens.filter(i => i.tipo === 'insumo').map(i => i.material_id));
+    const conflitos = itensConsolidados.filter(ins => idsNoOrcamento.has(ins.material_id));
+
+    if (conflitos.length > 0) {
+      setAssistenteMergeState({ pending: true, itens: itensConsolidados });
+      setShowAssistenteDrywall(false);
+    } else {
+      aplicarAssistenteMateriais(itensConsolidados, 'add');
+    }
+  };
+
+  const aplicarAssistenteMateriais = (lista, mode) => {
+    setItens(prev => {
+      let novoItens = [...prev];
+      lista.forEach(ins => {
+        const itemExistente = novoItens.find(i => i.tipo === 'insumo' && i.material_id === ins.material_id);
+        if (itemExistente) {
+          if (mode === 'somar') {
+            itemExistente.quantidade += ins.quantidade;
+          } else if (mode === 'substituir') {
+            itemExistente.quantidade = ins.quantidade;
+          }
+        } else {
+          novoItens.push(ins);
+        }
+      });
+      return novoItens;
+    });
+    setAssistenteMergeState(null);
     setShowAssistenteDrywall(false);
   };
 
@@ -1087,7 +852,7 @@ function OrcamentoModal({
   const handleCreateMaterial = async () => {
     setSavingMaterial(true);
     try {
-      const res = await api.post('/servicos/materiais', {
+      const res = await api.post('/materiais', {
         nome: newMaterial.nome.trim(),
         unidade: newMaterial.unidade.trim() || 'Un',
         preco_medio: parseFloat(String(newMaterial.preco_medio).replace(',', '.')) || 0,
@@ -1131,7 +896,10 @@ function OrcamentoModal({
         tipo: 'servico',
         servico_nome: s.nome,
         preco_unitario: Number(s.preco_total) || 0,
-        quantidade: 0,
+        preco_catalogo: Number(s.preco_total) || 0,
+        unidade: s.unidade || 'Vb',
+        quantidade: 1,
+        fornecido_por: 'Edifica',
         desconto_percentual: 0,
         materiais: s.servico_materiais || [],
         mao_de_obra: s.mao_de_obra || 0
@@ -1141,7 +909,7 @@ function OrcamentoModal({
     }
   };
 
-  const subtotalBruto = itens.reduce((sum, item) => sum + (item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade)), 0);
+  const subtotalBruto = itens.reduce((sum, item) => sum + ((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade)), 0);
   const totalLiquido = subtotalBruto;
   const fatorAcrescimo = 1 + ((margemBdiPercentual + impostosPercentual) / 100);
   const valorTotalFinal = totalLiquido * fatorAcrescimo;
@@ -1196,6 +964,7 @@ function OrcamentoModal({
         impostos_percentual: impostosPercentual,
         condicao_pagamento: condicoesPagamentoCustom.trim() || null,
         modo_exibicao: modoExibicao,
+        fornecimento_materiais: fornecimentoMateriais,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
@@ -1203,7 +972,6 @@ function OrcamentoModal({
           descricao: i.servico_nome || i.descricao,
           quantidade: Number(i.quantidade) || 0,
           preco_unitario: Number(i.preco_unitario) || 0,
-          fornecido_por: i.fornecido_por || 'Edifica',
           unidade: i.unidade,
           preco_catalogo: i.preco_catalogo,
           embalagem_id: i.embalagem_id || null,
@@ -1219,14 +987,20 @@ function OrcamentoModal({
         res = await api.post('/servicos/orcamentos', payload);
         setCurrentId(res.data.id);
       }
-      if (onSaveSuccess) {
-        onSaveSuccess(res.data, targetStatus === 'aprovado');
+      try {
+        if (onSaveSuccess) {
+          onSaveSuccess(res.data, targetStatus === 'aprovado');
+        }
+      } catch (cbErr) {
+        console.warn('Erro no callback onSaveSuccess:', cbErr);
       }
       onClose();
     } catch (err) {
       console.error(err);
       if (err.response && err.response.data && err.response.data.detail) {
-        setErrorMsg('Erro: ' + JSON.stringify(err.response.data.detail));
+        setErrorMsg('Erro: ' + (typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail)));
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setErrorMsg('Tempo limite excedido ao salvar o orçamento. Tente novamente.');
       } else {
         setErrorMsg('Erro ao salvar orçamento. Tente novamente.');
       }
@@ -1267,6 +1041,7 @@ function OrcamentoModal({
         impostos_percentual: impostosPercentual,
         condicao_pagamento: condicoesPagamentoCustom.trim() || null,
         modo_exibicao: modoExibicao,
+        fornecimento_materiais: fornecimentoMateriais,
         itens: itens.map(i => ({
           servico_id: i.servico_id || null,
           material_id: i.material_id || null,
@@ -1560,6 +1335,21 @@ function OrcamentoModal({
               </div>
 
               <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-amber-400" />
+                  Fornecimento de Materiais (Global)
+                </label>
+                <select
+                  value={fornecimentoMateriais}
+                  onChange={(e) => setFornecimentoMateriais(e.target.value)}
+                  className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 cursor-pointer"
+                >
+                  <option value="edifica">A Edifica fornece (valores somados ao orçamento)</option>
+                  <option value="cliente">O Cliente fornece (valores zerados no orçamento)</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
                   Objetivo Específico (Opcional - se vazio, lista os nomes dos serviços)
                 </label>
@@ -1616,7 +1406,7 @@ function OrcamentoModal({
                 <FileText className="w-4 h-4 text-emerald-400" />
                 Carregar Modelo de Orçamento
               </h5>
-              <p className="text-[10px] text-slate-400">Preencha os itens automaticamente com quantidades zeradas.</p>
+              <p className="text-[10px] text-slate-400">Preencha os itens automaticamente com quantidade padrão (1).</p>
             </div>
             <select
               onChange={(e) => {
@@ -1628,17 +1418,17 @@ function OrcamentoModal({
               className="bg-slate-900 border border-emerald-500/30 text-emerald-400 text-xs rounded-lg px-3 py-1.5 focus:outline-none cursor-pointer"
             >
               <option value="">+ Escolher Modelo</option>
-              <option value="Alvenaria Completa">Alvenaria Completa</option>
+              <option value="Alvenaria">Alvenaria</option>
               <option value="Drywall">Drywall</option>
             </select>
           </div>
 
-          {/* Seleção de Itens (Serviços e Insumos) */}
+          {/* Seleção de Itens (Serviços e Materiais) */}
           <div>
             <h4 className="text-sm font-bold text-white mb-2 flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-blue-400" />
-                Catálogo de Serviços e Insumos
+                Catálogo de Serviços e Materiais
               </span>
               <span className="text-xs text-slate-400 font-normal">Busque e adicione à proposta</span>
             </h4>
@@ -1671,7 +1461,7 @@ function OrcamentoModal({
                   onClick={() => setItemFilterType('insumos')}
                   className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${itemFilterType === 'insumos' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                 >
-                  Insumos
+                  Materiais
                 </button>
               </div>
             </div>
@@ -1688,7 +1478,7 @@ function OrcamentoModal({
                 
                 if (itemFilterType === 'todos' || itemFilterType === 'insumos') {
                   const m = materiais.filter(x => x.nome.toLowerCase().includes(term));
-                  filteredItems.push(...m.map(i => ({ ...i, tipo: 'Insumo' })));
+                  filteredItems.push(...m.map(i => ({ ...i, tipo: 'Material' })));
                 }
 
                 if (servicos.length === 0 && materiais.length === 0) {
@@ -1774,10 +1564,10 @@ function OrcamentoModal({
             {showNewMaterial && (
               <div className="mt-3 p-3 bg-slate-800/40 border border-emerald-500/30 rounded-xl relative">
                 <button type="button" onClick={() => setShowNewMaterial(false)} className="absolute top-3 right-3 text-slate-500 hover:text-slate-300"><X className="w-4 h-4" /></button>
-                <h5 className="text-xs font-bold text-white mb-2">Novo Insumo Direto</h5>
+                <h5 className="text-xs font-bold text-white mb-2">Novo Material Direto</h5>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
                   <div className="sm:col-span-2">
-                    <label className="block text-[11px] text-slate-400 mb-1">Nome do Insumo</label>
+                    <label className="block text-[11px] text-slate-400 mb-1">Nome do Material</label>
                     <input
                       type="text"
                       value={newMaterial.nome}
@@ -1788,16 +1578,17 @@ function OrcamentoModal({
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Unidade</label>
-                    <input
-                      list="unidades-list-novo"
+                    <select
                       value={newMaterial.unidade}
                       onChange={(e) => setNewMaterial(p => ({ ...p, unidade: e.target.value }))}
-                      className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-xs text-white"
-                      placeholder="Selecione ou digite..."
-                    />
-                    <datalist id="unidades-list-novo">
-                      {UNIDADES_INSUMO.map(u => <option key={u} value={u} />)}
-                    </datalist>
+                      className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer"
+                    >
+                      {UNIDADES_INSUMO_PADRAO.map(u => (
+                        <option key={u.value} value={u.value} className="bg-slate-900 text-white">
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="sm:col-span-3">
                     <label className="block text-[11px] text-slate-400 mb-1">Preço Médio (R$)</label>
@@ -1837,7 +1628,7 @@ function OrcamentoModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-white truncate block">{item.servico_nome}</span>
-                        {item.fornecido_por === 'Cliente' && (
+                        {fornecimentoMateriais === 'cliente' && item.tipo === 'insumo' && (
                           <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-semibold uppercase">Fornecido p/ Cliente</span>
                         )}
                       </div>
@@ -1874,7 +1665,7 @@ function OrcamentoModal({
                       <div className="text-right min-w-[90px]">
                         <label className="text-[10px] text-slate-500 block uppercase font-semibold">Subtotal</label>
                         <span className="text-xs font-bold text-emerald-400">
-                          {formatCurrency(item.fornecido_por === 'Cliente' ? 0 : (item.preco_unitario * item.quantidade))}
+                          {formatCurrency((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade))}
                         </span>
                       </div>
                       <button
@@ -1907,14 +1698,7 @@ function OrcamentoModal({
           )}
 
           {/* Ações do Modal */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-slate-700/60 transition-all cursor-pointer"
-            >
-              Cancelar
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-800">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1925,6 +1709,28 @@ function OrcamentoModal({
                 <Eye className="w-4 h-4 text-blue-400" />
                 <span>Pré-visualizar PDF</span>
               </button>
+
+              {fornecimentoMateriais === 'cliente' && itens.some(i => i.tipo === 'insumo') && (
+                <button
+                  type="button"
+                  disabled={itens.length === 0 || !clienteNome.trim()}
+                  onClick={() => printListaMateriais({
+                    clienteNome,
+                    clienteEndereco,
+                    clienteTelefone,
+                    clienteEmail,
+                    clienteContato: [clienteTelefone, clienteEmail].filter(Boolean).join(' • '),
+                    itens,
+                    dataEmissao: initialOrcamento?.created_at
+                      ? new Date(initialOrcamento.created_at).toLocaleDateString('pt-BR')
+                      : new Date().toLocaleDateString('pt-BR'),
+                  })}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-amber-200 border border-slate-700 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <span>PDF Lista de Materiais</span>
+                </button>
+              )}
               <button
                 type="button"
                 disabled={saving || itens.length === 0 || !clienteNome.trim()}
@@ -1942,14 +1748,47 @@ function OrcamentoModal({
       {showAssistenteDrywall && (
         <AssistenteDrywallModal 
           onClose={() => setShowAssistenteDrywall(false)}
-          onAddInsumos={handleAddAssistenteInsumos}
+          onAddInsumos={handleAddAssistenteMateriais}
           materiaisCatalog={materiais}
         />
+      )}
+
+      {/* Modal de Conflito de Materiais do Assistente */}
+      {assistenteMergeState?.pending && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6">
+            <h3 className="text-lg font-bold text-white mb-2">Materiais Duplicados</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Alguns materiais calculados pelo assistente já existem neste orçamento. O que você deseja fazer com as quantidades?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => aplicarAssistenteMateriais(assistenteMergeState.itens, 'somar')}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Somar as Quantidades
+              </button>
+              <button 
+                onClick={() => aplicarAssistenteMateriais(assistenteMergeState.itens, 'substituir')}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Substituir pelas Novas
+              </button>
+              <button 
+                onClick={() => setAssistenteMergeState(null)}
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition-colors cursor-pointer mt-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {step === 2 && (
         <PropostaComercialPreviewModal
           data={{
+            user,
             clienteNome,
             clienteEndereco,
             clienteTelefone,
@@ -1968,6 +1807,7 @@ function OrcamentoModal({
             objetivoCustom,
             observacoesCustom: observacoes,
             condicoesPagamentoCustom,
+            fornecimentoMateriais,
           }}
           onClose={onClose}
           onBackToEdit={() => setStep(1)}
@@ -1987,7 +1827,7 @@ function OrcamentoModal({
 // ========================================
 // Componente Principal
 // ========================================
-export default function ServicosPage({ initialOrcamentoData = null, onClearInitialOrcamentoData = null }) {
+export default function ServicosPage({ initialOrcamentoData = null, onClearInitialOrcamentoData = null, user = null }) {
   const [activeSubTab, setActiveSubTab] = useState('orcamentos'); // 'orcamentos' ou 'servicos'
   const [servicos, setServicos] = useState(() => {
     try {
@@ -2039,19 +1879,19 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
   const [orcamentoStatusFilter, setOrcamentoStatusFilter] = useState('');
   const [orcamentoObraFilter, setOrcamentoObraFilter] = useState('');
 
-  // Filtros e Edição da Tabela de Valores (Gestão Global de Insumos / Materiais)
+  // Filtros e Edição da Tabela de Valores (Gestão Global de Materiais / Materiais)
   const [tabelaSearch, setTabelaSearch] = useState('');
   const [tabelaUnidadeFilter, setTabelaUnidadeFilter] = useState('');
   const [inlineEditingId, setInlineEditingId] = useState(null);
   const [inlineValores, setInlineValores] = useState({ preco_medio: '' });
   const [savingValoresId, setSavingValoresId] = useState(null);
 
-  // Modais de Insumos (Tabela de Valores)
-  const [showInsumoModal, setShowInsumoModal] = useState(false);
-  const [editingInsumo, setEditingInsumo] = useState(null);
-  const [insumoForm, setInsumoForm] = useState({ nome: '', unidade: 'M²', preco_medio: '' });
-  const [savingInsumo, setSavingInsumo] = useState(false);
-  const [showDeleteInsumoConfirm, setShowDeleteInsumoConfirm] = useState(null);
+  // Modais de Materiais (Tabela de Valores)
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState(null);
+  const [insumoForm, setMaterialForm] = useState({ nome: '', unidade: 'M²', preco_medio: '' });
+  const [savingMaterial, setSavingMaterial] = useState(false);
+  const [showDeleteMaterialConfirm, setShowDeleteMaterialConfirm] = useState(null);
 
   // Modais de Serviços e Orçamentos
   const [showForm, setShowForm] = useState(false);
@@ -2071,11 +1911,11 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     return { total, precoMedio, categoriasUnicas: categoriasUnicas.length, totalComposicoes };
   }, [servicos]);
 
-  // Stats da Tabela de Valores (Exclusiva para Insumos / Materiais)
+  // Stats da Tabela de Valores (Exclusiva para Materiais / Materiais)
   const tabelaValoresStats = useMemo(() => {
     const total = materiais.length;
     const somaPrecoMedio = materiais.reduce((acc, m) => acc + (Number(m.preco_medio) || 0), 0);
-    const precoMedioInsumo = total > 0 ? somaPrecoMedio / total : 0;
+    const precoMedioMaterial = total > 0 ? somaPrecoMedio / total : 0;
     const maiorPreco = materiais.reduce((max, m) => Math.max(max, Number(m.preco_medio) || 0), 0);
 
     const insumosEmUsoSet = new Set();
@@ -2088,7 +1928,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
 
     return {
       total,
-      precoMedioInsumo,
+      precoMedioMaterial,
       maiorPreco,
       insumosEmUso
     };
@@ -2174,21 +2014,21 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     try {
       const [servicosRes, materiaisRes, categoriasRes, orcamentosRes, obrasRes] = await Promise.allSettled([
         api.get('/servicos'),
-        api.get('/servicos/materiais'),
+        api.get('/materiais'),
         api.get('/servicos/categorias'),
         api.get('/servicos/orcamentos'),
         api.get('/obras'),
       ]);
 
-      if (servicosRes.status === 'fulfilled' && Array.isArray(servicosRes.value.data) && servicosRes.value.data.length > 0) {
+      if (servicosRes.status === 'fulfilled' && Array.isArray(servicosRes.value.data)) {
         setServicos(servicosRes.value.data);
         try { localStorage.setItem('edifica_cached_servicos', JSON.stringify(servicosRes.value.data)); } catch {}
       }
-      if (materiaisRes.status === 'fulfilled' && Array.isArray(materiaisRes.value.data) && materiaisRes.value.data.length > 0) {
+      if (materiaisRes.status === 'fulfilled' && Array.isArray(materiaisRes.value.data)) {
         setMateriais(materiaisRes.value.data);
         try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(materiaisRes.value.data)); } catch {}
       }
-      if (categoriasRes.status === 'fulfilled' && Array.isArray(categoriasRes.value.data) && categoriasRes.value.data.length > 0) {
+      if (categoriasRes.status === 'fulfilled' && Array.isArray(categoriasRes.value.data)) {
         setCategorias(categoriasRes.value.data);
       }
       if (orcamentosRes.status === 'fulfilled' && Array.isArray(orcamentosRes.value.data)) {
@@ -2234,7 +2074,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     });
   }, [orcamentos, orcamentoSearch, orcamentoStatusFilter, orcamentoObraFilter]);
 
-  // Filtrar Insumos da Tabela de Valores
+  // Filtrar Materiais da Tabela de Valores
   const filteredTabelaMateriais = useMemo(() => {
     return materiais.filter(m => {
       const matchSearch = !tabelaSearch ||
@@ -2264,7 +2104,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
       const precoMedio = parseFloat(String(inlineValores.preco_medio).replace(',', '.')) || 0;
       
       if (materialId && !materialId.startsWith('m0') && !materialId.startsWith('m-')) {
-        const res = await api.put(`/servicos/materiais/${materialId}`, {
+        const res = await api.put(`/materiais/${materialId}`, {
           preco_medio: precoMedio
         });
         if (res.data) {
@@ -2297,27 +2137,27 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     }
   };
 
-  // Handlers do Modal de Insumos (Criar/Editar/Excluir)
-  const handleOpenNewInsumo = () => {
-    setEditingInsumo(null);
-    setInsumoForm({ nome: '', unidade: 'M²', preco_medio: '' });
-    setShowInsumoModal(true);
+  // Handlers do Modal de Materiais (Criar/Editar/Excluir)
+  const handleOpenNewMaterial = () => {
+    setEditingMaterial(null);
+    setMaterialForm({ nome: '', unidade: 'M²', preco_medio: '' });
+    setShowMaterialModal(true);
   };
 
-  const handleOpenEditInsumo = (material) => {
-    setEditingInsumo(material);
-    setInsumoForm({
+  const handleOpenEditMaterial = (material) => {
+    setEditingMaterial(material);
+    setMaterialForm({
       nome: material.nome || '',
       unidade: material.unidade || 'm²',
       preco_medio: material.preco_medio !== undefined ? String(material.preco_medio) : ''
     });
-    setShowInsumoModal(true);
+    setShowMaterialModal(true);
   };
 
-  const handleSaveInsumoForm = async (e) => {
+  const handleSaveMaterialForm = async (e) => {
     if (e) e.preventDefault();
     if (!insumoForm.nome.trim()) return;
-    setSavingInsumo(true);
+    setSavingMaterial(true);
     try {
       const precoMedio = parseFloat(String(insumoForm.preco_medio).replace(',', '.')) || 0;
       const payload = {
@@ -2326,30 +2166,30 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
         preco_medio: precoMedio
       };
 
-      if (editingInsumo?.id && !editingInsumo.id.startsWith('m0') && !editingInsumo.id.startsWith('m-')) {
-        const res = await api.put(`/servicos/materiais/${editingInsumo.id}`, payload);
-        const updatedMat = res.data || { ...editingInsumo, ...payload };
+      if (editingMaterial?.id && !editingMaterial.id.startsWith('m0') && !editingMaterial.id.startsWith('m-')) {
+        const res = await api.put(`/materiais/${editingMaterial.id}`, payload);
+        const updatedMat = res.data || { ...editingMaterial, ...payload };
         setMateriais(prev => {
-          const updated = prev.map(m => m.id === editingInsumo.id ? updatedMat : m);
+          const updated = prev.map(m => m.id === editingMaterial.id ? updatedMat : m);
           try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
           return updated;
         });
-        cascadeRecalculateServicos(editingInsumo.id, precoMedio);
-        setToast({ message: 'Insumo atualizado e composições recalculadas!', type: 'success' });
-      } else if (editingInsumo) {
+        cascadeRecalculateServicos(editingMaterial.id, precoMedio);
+        setToast({ message: 'Material atualizado e composições recalculadas!', type: 'success' });
+      } else if (editingMaterial) {
         // Mock edit
-        const updatedMat = { ...editingInsumo, ...payload };
+        const updatedMat = { ...editingMaterial, ...payload };
         setMateriais(prev => {
-          const updated = prev.map(m => m.id === editingInsumo.id ? updatedMat : m);
+          const updated = prev.map(m => m.id === editingMaterial.id ? updatedMat : m);
           try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
           return updated;
         });
-        cascadeRecalculateServicos(editingInsumo.id, precoMedio);
-        setToast({ message: 'Insumo atualizado com sucesso!', type: 'success' });
+        cascadeRecalculateServicos(editingMaterial.id, precoMedio);
+        setToast({ message: 'Material atualizado com sucesso!', type: 'success' });
       } else {
         // Criar novo insumo
         try {
-          const res = await api.post('/servicos/materiais', payload);
+          const res = await api.post('/materiais', payload);
           const newMat = res.data || { id: `m-${Date.now()}`, ...payload };
           setMateriais(prev => {
             const updated = [newMat, ...prev];
@@ -2366,27 +2206,27 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
         }
         setToast({ message: 'Novo insumo cadastrado na Tabela de Valores!', type: 'success' });
       }
-      setShowInsumoModal(false);
-      setEditingInsumo(null);
+      setShowMaterialModal(false);
+      setEditingMaterial(null);
     } catch (err) {
       setToast({ message: 'Erro ao salvar insumo.', type: 'error' });
     } finally {
-      setSavingInsumo(false);
+      setSavingMaterial(false);
     }
   };
 
-  const handleDeleteInsumo = async (material) => {
+  const handleDeleteMaterial = async (material) => {
     try {
       if (material.id && !material.id.startsWith('m0') && !material.id.startsWith('m-')) {
-        await api.delete(`/servicos/materiais/${material.id}`);
+        await api.delete(`/materiais/${material.id}`);
       }
       setMateriais(prev => {
         const updated = prev.filter(m => m.id !== material.id);
         try { localStorage.setItem('edifica_cached_materiais', JSON.stringify(updated)); } catch {}
         return updated;
       });
-      setShowDeleteInsumoConfirm(null);
-      setToast({ message: 'Insumo removido da Tabela de Valores.', type: 'info' });
+      setShowDeleteMaterialConfirm(null);
+      setToast({ message: 'Material removido da Tabela de Valores.', type: 'info' });
     } catch (err) {
       setToast({ message: 'Erro ao excluir insumo.', type: 'error' });
     }
@@ -2603,8 +2443,8 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
             }`}
           >
             <Package className={`w-4 h-4 shrink-0 ${activeSubTab === 'tabela_valores' ? 'text-amber-400' : ''}`} />
-            <span className="hidden sm:inline">Tabela de Valores (Insumos)</span>
-            <span className="sm:hidden">Insumos</span>
+            <span className="hidden sm:inline">Tabela de Valores (Materiais)</span>
+            <span className="sm:hidden">Materiais</span>
             <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold">
               {materiais.length}
             </span>
@@ -2837,6 +2677,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                         {/* Botão Impressão Rápida Direta */}
                         <button
                           onClick={() => printPropostaComercial({
+                            user,
                             clienteNome: orc.cliente_nome,
                             clienteEndereco: orc.cliente_endereco || 'BLUMENAU',
                             clienteTelefone: orc.cliente_telefone,
@@ -2855,6 +2696,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                             prazoGarantia: orc.prazo_garantia || '12 (doze) meses',
                             objetivoCustom: orc.objetivo || '',
                             observacoesCustom: orc.observacoes || '',
+                            fornecimentoMateriais: orc.fornecimento_materiais || 'edifica',
                           })}
                           className="p-2 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 transition-all cursor-pointer"
                           title="Impressão Rápida / Salvar PDF"
@@ -3020,18 +2862,18 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                 <Package className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">Tabela de Valores — Gestão Global de Insumos</h4>
+                <h4 className="text-sm font-bold text-white">Tabela de Valores — Gestão Global de Materiais</h4>
                 <p className="text-xs text-slate-400">
                   Custos unitários base dos materiais utilizados nas composições. Alterações refletem automaticamente no custo de materiais de todos os serviços vinculados (orçamentos já aprovados permanecem congelados).
                 </p>
               </div>
             </div>
             <button
-              onClick={handleOpenNewInsumo}
+              onClick={handleOpenNewMaterial}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
-              <span>Novo Insumo</span>
+              <span>Novo Material</span>
             </button>
           </div>
 
@@ -3039,7 +2881,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               {
-                label: 'Insumos Cadastrados',
+                label: 'Materiais Cadastrados',
                 value: `${tabelaValoresStats.total} insumos`,
                 icon: Package,
                 color: 'text-amber-400',
@@ -3048,14 +2890,14 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               },
               {
                 label: 'Custo Médio Unitário',
-                value: formatCurrency(tabelaValoresStats.precoMedioInsumo),
+                value: formatCurrency(tabelaValoresStats.precoMedioMaterial),
                 icon: DollarSign,
                 color: 'text-emerald-400',
                 bg: 'bg-emerald-500/10',
                 border: 'border-emerald-500/20'
               },
               {
-                label: 'Insumos em Uso',
+                label: 'Materiais em Uso',
                 value: `${tabelaValoresStats.insumosEmUso} insumos`,
                 sub: 'Vinculados a serviços ativos',
                 icon: Wrench,
@@ -3113,7 +2955,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
             </div>
           </div>
 
-          {/* Tabela de Insumos / Materiais */}
+          {/* Tabela de Materiais / Materiais */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="flex flex-col items-center gap-3">
@@ -3127,7 +2969,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 uppercase tracking-wider font-semibold text-[11px]">
-                      <th className="py-3 px-4">Insumo / Material</th>
+                      <th className="py-3 px-4">Material / Material</th>
                       <th className="py-3 px-3 text-center">Unidade</th>
                       <th className="py-3 px-4 text-right">Custo Unitário Global (R$)</th>
                       <th className="py-3 px-4 text-center">Serviços Vinculados</th>
@@ -3143,7 +2985,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
 
                       return (
                         <tr key={material.id} className={`hover:bg-slate-800/30 transition-colors ${isEditing ? 'bg-amber-500/5' : ''}`}>
-                          {/* Insumo / Descrição */}
+                          {/* Material / Descrição */}
                           <td className="py-3.5 px-4 max-w-xs">
                             <span className="font-bold text-white text-sm block">{material.nome}</span>
                           </td>
@@ -3229,16 +3071,16 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                                   <DollarSign className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleOpenEditInsumo(material)}
+                                  onClick={() => handleOpenEditMaterial(material)}
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all cursor-pointer"
-                                  title="Editar Insumo"
+                                  title="Editar Material"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => setShowDeleteInsumoConfirm(material)}
+                                  onClick={() => setShowDeleteMaterialConfirm(material)}
                                   className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                                  title="Excluir Insumo"
+                                  title="Excluir Material"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -3265,11 +3107,11 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               </p>
               {!tabelaSearch && !tabelaUnidadeFilter && (
                 <button
-                  onClick={handleOpenNewInsumo}
+                  onClick={handleOpenNewMaterial}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Cadastrar Primeiro Insumo</span>
+                  <span>Cadastrar Primeiro Material</span>
                 </button>
               )}
             </div>
@@ -3311,6 +3153,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
         onRefreshCatalog={fetchData}
         initialOrcamento={selectedOrcamento}
         readOnlyView={readOnlyViewOrcamento}
+        user={user}
       />
 
       {/* Modal de Confirmação de Exclusão de Serviço */}
@@ -3385,23 +3228,23 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
         </div>
       </Modal>
 
-      {/* Modal Criar/Editar Insumo (Tabela de Valores) */}
+      {/* Modal Criar/Editar Material (Tabela de Valores) */}
       <Modal
-        isOpen={showInsumoModal}
-        onClose={() => { setShowInsumoModal(false); setEditingInsumo(null); }}
-        title={editingInsumo ? 'Editar Insumo na Tabela de Valores' : 'Novo Insumo no Catálogo Global'}
+        isOpen={showMaterialModal}
+        onClose={() => { setShowMaterialModal(false); setEditingMaterial(null); }}
+        title={editingMaterial ? 'Editar Material na Tabela de Valores' : 'Novo Material no Catálogo Global'}
         size="md"
       >
-        <form onSubmit={handleSaveInsumoForm} className="space-y-4">
+        <form onSubmit={handleSaveMaterialForm} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-              Nome do Insumo / Material <span className="text-red-400">*</span>
+              Nome do Material / Material <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
               required
               value={insumoForm.nome}
-              onChange={(e) => setInsumoForm({ ...insumoForm, nome: e.target.value })}
+              onChange={(e) => setMaterialForm({ ...insumoForm, nome: e.target.value })}
               placeholder="Ex: Placa Drywall ST 12.5mm, Cimento CP-II..."
               className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
             />
@@ -3412,19 +3255,17 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               <label className="text-xs font-semibold text-slate-300 block mb-1.5">
                 Unidade de Medida <span className="text-red-400">*</span>
               </label>
-              <input
-                type="text"
-                list="unidades-list-modal"
+              <select
                 value={insumoForm.unidade}
-                onChange={(e) => setInsumoForm({ ...insumoForm, unidade: e.target.value })}
+                onChange={(e) => setMaterialForm({ ...insumoForm, unidade: e.target.value })}
                 className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer"
-                placeholder="Selecione ou digite..."
-              />
-              <datalist id="unidades-list-modal">
-                {[...new Set([...UNIDADES_INSUMO, ...materiais.map(m => m.unidade || "Un").filter(Boolean)])].map(u => (
-                  <option key={u} value={u} />
+              >
+                {UNIDADES_INSUMO_PADRAO.map(u => (
+                  <option key={u.value} value={u.value} className="bg-slate-900 text-white">
+                    {u.label}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
 
             <div>
@@ -3437,7 +3278,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                 min="0"
                 required
                 value={insumoForm.preco_medio}
-                onChange={(e) => setInsumoForm({ ...insumoForm, preco_medio: e.target.value })}
+                onChange={(e) => setMaterialForm({ ...insumoForm, preco_medio: e.target.value })}
                 placeholder="0.00"
                 className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/80 rounded-xl text-sm text-white text-right focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               />
@@ -3451,50 +3292,50 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
             <button
               type="button"
-              onClick={() => { setShowInsumoModal(false); setEditingInsumo(null); }}
+              onClick={() => { setShowMaterialModal(false); setEditingMaterial(null); }}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={savingInsumo || !insumoForm.nome.trim()}
+              disabled={savingMaterial || !insumoForm.nome.trim()}
               className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
-              <span>{savingInsumo ? 'Salvando...' : editingInsumo ? 'Salvar Alterações' : 'Cadastrar Insumo'}</span>
+              <span>{savingMaterial ? 'Salvando...' : editingMaterial ? 'Salvar Alterações' : 'Cadastrar Material'}</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal Confirmação Exclusão de Insumo */}
-      {showDeleteInsumoConfirm && (
+      {/* Modal Confirmação Exclusão de Material */}
+      {showDeleteMaterialConfirm && (
         <Modal
-          isOpen={!!showDeleteInsumoConfirm}
-          onClose={() => setShowDeleteInsumoConfirm(null)}
-          title="Excluir Insumo da Tabela de Valores"
+          isOpen={!!showDeleteMaterialConfirm}
+          onClose={() => setShowDeleteMaterialConfirm(null)}
+          title="Excluir Material da Tabela de Valores"
           size="sm"
         >
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300">
               <AlertCircle className="w-6 h-6 shrink-0" />
               <p className="text-xs">
-                Tem certeza que deseja excluir o insumo <strong className="text-white">{showDeleteInsumoConfirm.nome}</strong> da Tabela de Valores?
+                Tem certeza que deseja excluir o insumo <strong className="text-white">{showDeleteMaterialConfirm.nome}</strong> da Tabela de Valores?
               </p>
             </div>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setShowDeleteInsumoConfirm(null)}
+                onClick={() => setShowDeleteMaterialConfirm(null)}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => handleDeleteInsumo(showDeleteInsumoConfirm)}
+                onClick={() => handleDeleteMaterial(showDeleteMaterialConfirm)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/20 transition-all cursor-pointer"
               >
-                Excluir Insumo
+                Excluir Material
               </button>
             </div>
           </div>

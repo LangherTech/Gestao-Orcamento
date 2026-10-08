@@ -18,8 +18,28 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const VisitasPage = lazy(() => import('./pages/VisitasPage'));
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedObraId, setSelectedObraId] = useState(null);
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('edifica_active_tab');
+    const validTabs = ['visitas', 'servicos', 'obras', 'dashboard', 'financeiro', 'cronograma', 'compras', 'gestao', 'rdo', 'calendario'];
+    return saved && validTabs.includes(saved) ? saved : 'visitas';
+  });
+  const [selectedObraId, setSelectedObraId] = useState(() => {
+    return localStorage.getItem('edifica_selected_obra_id') || null;
+  });
+
+  useEffect(() => {
+    if (activeTab) {
+      localStorage.setItem('edifica_active_tab', activeTab);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedObraId) {
+      localStorage.setItem('edifica_selected_obra_id', selectedObraId);
+    } else {
+      localStorage.removeItem('edifica_selected_obra_id');
+    }
+  }, [selectedObraId]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -128,12 +148,13 @@ export default function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (session) {
         localStorage.setItem('edifica_token', session.access_token);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         localStorage.removeItem('edifica_token');
+        localStorage.removeItem('edifica_active_tab');
       }
     });
 
@@ -219,13 +240,14 @@ export default function App() {
                 <ServicosPage 
                   initialOrcamentoData={pendingOrcamentoData}
                   onClearInitialOrcamentoData={() => setPendingOrcamentoData(null)}
+                  user={session?.user}
                 />
               )}
               {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} user={session?.user} />}
-              {activeTab === 'rdo' && <RDOPage user={session?.user} />}
-              {activeTab === 'compras' && <ComprasPage obras={obras} user={session?.user} />}
-              {activeTab === 'gestao' && <GestaoPage obras={obras} user={session?.user} />}
-              {activeTab === 'calendario' && <CalendarioPage obras={obras} user={session?.user} />}
+              {activeTab === 'rdo' && <RDOPage selectedObraId={selectedObraId} user={session?.user} />}
+              {activeTab === 'compras' && <ComprasPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+              {activeTab === 'gestao' && <GestaoPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+              {activeTab === 'calendario' && <CalendarioPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
               {activeTab === 'visitas' && (
                 <VisitasPage 
                   user={session?.user} 

@@ -49,9 +49,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
     data_inicio: '',
     data_prevista_fim: '',
     data_real_fim: '',
-    orcamento_materiais: '',
-    orcamento_empreiteiros: '',
-    orcamento_caixa: '',
+
     valor_aprovado: '',
     status: 'ativa',
     arquivada: false,
@@ -167,9 +165,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
       data_inicio: '',
       data_prevista_fim: '',
       data_real_fim: '',
-      orcamento_materiais: '',
-      orcamento_empreiteiros: '',
-      orcamento_caixa: '',
+
       valor_aprovado: '',
       status: 'ativa',
       arquivada: false,
@@ -191,9 +187,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
       data_inicio: obra.data_inicio || '',
       data_prevista_fim: obra.data_prevista_fim || '',
       data_real_fim: obra.data_real_fim || '',
-      orcamento_materiais: obra.orcamento_materiais || '',
-      orcamento_empreiteiros: obra.orcamento_empreiteiros || '',
-      orcamento_caixa: obra.orcamento_caixa || '',
+
       valor_aprovado: obra.valor_aprovado || '',
       status: obra.status || 'ativa',
       arquivada: Boolean(obra.arquivada),
@@ -214,9 +208,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
     try {
       const payload = {
         ...formData,
-        orcamento_materiais: parseFloat(String(formData.orcamento_materiais || 0).replace(',', '.')) || 0,
-        orcamento_empreiteiros: parseFloat(String(formData.orcamento_empreiteiros || 0).replace(',', '.')) || 0,
-        orcamento_caixa: parseFloat(String(formData.orcamento_caixa || 0).replace(',', '.')) || 0,
+
         valor_aprovado: parseFloat(String(formData.valor_aprovado || 0).replace(',', '.')) || 0,
         data_inicio: formData.data_inicio || null,
         data_prevista_fim: formData.data_prevista_fim || null,
@@ -571,22 +563,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
                         <span className="font-bold text-amber-400">{formatMoney(valorPendenteCalc)}</span>
                       </div>
                     )}
-                    {(obra.orcamento_materiais > 0 || obra.orcamento_empreiteiros > 0 || obra.orcamento_caixa > 0) && (
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Materiais</span>
-                          <span className="text-blue-400 font-semibold">{formatMoney(obra.orcamento_materiais)}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Empreiteiros</span>
-                          <span className="text-amber-400 font-semibold">{formatMoney(obra.orcamento_empreiteiros)}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Caixa Obra</span>
-                          <span className="text-emerald-400 font-semibold">{formatMoney(obra.orcamento_caixa)}</span>
-                        </div>
-                      </div>
-                    )}
+
                   </div>
                 </div>
 
@@ -866,56 +843,7 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
                   </div>
                 </div>
 
-                {/* Tetos Orçamentários por Categoria */}
-                <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Tetos Orçamentários (Opcional)
-                    </span>
-                    <span className="text-[10px] text-slate-500">Auto-sugerido (55% / 40% / 5%)</span>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-blue-400 font-medium">Materiais (R$)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="orcamento_materiais"
-                        value={formData.orcamento_materiais}
-                        onChange={handleInputChange}
-                        placeholder="0.00"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-amber-400 font-medium">Empreiteiros (R$)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="orcamento_empreiteiros"
-                        value={formData.orcamento_empreiteiros}
-                        onChange={handleInputChange}
-                        placeholder="0.00"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-emerald-400 font-medium">Caixa Obra (R$)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="orcamento_caixa"
-                        value={formData.orcamento_caixa}
-                        onChange={handleInputChange}
-                        placeholder="0.00"
-                        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
-                </div>
               </form>
             </div>
             

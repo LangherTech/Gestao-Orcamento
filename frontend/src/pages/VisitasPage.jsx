@@ -8,6 +8,15 @@ import api from '../services/api';
 import { supabase } from '../services/supabase';
 import { formatTelefone } from '../utils/masks';
 
+// Data local no formato YYYY-MM-DD (fuso horário local)
+const getTodayDateStr = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function VisitasPage({ user, onCreateOrcamento }) {
   const [visitas, setVisitas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +57,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
     endereco: '',
     classificacao: 'Normal',
     observacao: '',
-    data_visita: new Date().toISOString().split('T')[0],
+    data_visita: getTodayDateStr(),
     data_retorno: '',
     visitado_por: user?.id || '',
     foto_url: ''
@@ -80,12 +89,6 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
 
   // Identificação do usuário logado (Guilherme vs Marcio)
   const isGuilhermeUser = user?.email?.toLowerCase().includes('guilherme');
-  const meuNome = isGuilhermeUser ? 'Guilherme' : 'Marcio';
-  const nomeOutro = isGuilhermeUser ? 'Marcio' : 'Guilherme';
-  
-  // Encontra ID do outro sócio se já houver registros
-  const visitasOutro = visitas.find(v => v.visitado_por && v.visitado_por !== user?.id);
-  const outroSocioId = visitasOutro ? visitasOutro.visitado_por : 'outro_socio_id';
 
   // Geolocalização
   const handleUseMyLocation = () => {
@@ -131,7 +134,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
     setEditingVisita(null);
     setFormData({
       ...initialForm,
-      data_visita: new Date().toISOString().split('T')[0],
+      data_visita: getTodayDateStr(),
       visitado_por: user?.id || ''
     });
     setFotoFile(null);
@@ -149,7 +152,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
       endereco: visita.endereco || '',
       classificacao: visita.classificacao || 'Normal',
       observacao: visita.observacao || '',
-      data_visita: visita.data_visita ? visita.data_visita.split('T')[0] : new Date().toISOString().split('T')[0],
+      data_visita: visita.data_visita ? visita.data_visita.split('T')[0] : getTodayDateStr(),
       data_retorno: visita.data_retorno ? visita.data_retorno.split('T')[0] : '',
       visitado_por: visita.visitado_por || user?.id || '',
       foto_url: visita.foto_url || ''
@@ -190,6 +193,9 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
       };
 
       if (!payload.data_retorno) delete payload.data_retorno;
+      if (!editingVisita) {
+        payload.visitado_por = user?.id || null;
+      }
       if (!payload.visitado_por) delete payload.visitado_por;
 
       if (editingVisita) {
@@ -245,7 +251,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
   };
 
   // Cálculos de métricas do dia de hoje
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayDateStr();
   const visitasHoje = visitas.filter(v => v.data_visita && v.data_visita.split('T')[0] === todayStr);
   const totalVisitasHoje = visitasHoje.length;
   const porcentagemMeta = Math.min(Math.round((totalVisitasHoje / metaDiaria) * 100), 100);
@@ -904,30 +910,17 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
                 />
               </div>
 
-              {/* Classificação e Quem Visitou */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Classificação</label>
-                  <select 
-                    value={formData.classificacao} 
-                    onChange={e => setFormData({ ...formData, classificacao: e.target.value })} 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="Normal">Normal (Contato padrão)</option>
-                    <option value="Potencial">Potencial (Obra quente / imediata)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Feita por (Responsável)</label>
-                  <select 
-                    value={formData.visitado_por} 
-                    onChange={e => setFormData({ ...formData, visitado_por: e.target.value })} 
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value={user?.id || ''}>Eu ({meuNome})</option>
-                    <option value={outroSocioId}>Outro ({nomeOutro})</option>
-                  </select>
-                </div>
+              {/* Classificação */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Classificação</label>
+                <select 
+                  value={formData.classificacao} 
+                  onChange={e => setFormData({ ...formData, classificacao: e.target.value })} 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="Normal">Normal (Contato padrão)</option>
+                  <option value="Potencial">Potencial (Obra quente / imediata)</option>
+                </select>
               </div>
 
               {/* Data da Visita e Data de Retorno */}

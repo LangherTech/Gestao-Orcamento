@@ -104,7 +104,7 @@ function PhotoLightboxModal({ photo, onClose }) {
 // ========================================
 // Componente Principal: RDOPage
 // ========================================
-export default function RDOPage({ user }) {
+export default function RDOPage({ selectedObraId, user }) {
   const [rdos, setRdos] = useState([]);
   const [obras, setObras] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -149,7 +149,7 @@ export default function RDOPage({ user }) {
     setLoading(true);
     try {
       const [rdoRes, obrasRes] = await Promise.allSettled([
-        api.get('/rdo'),
+        api.get(`/rdo${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`),
         api.get('/obras')
       ]);
 
@@ -168,12 +168,12 @@ export default function RDOPage({ user }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedObraId]);
 
   // Abrir Modal de Criação
   const handleOpenNew = () => {
     setEditingRdo(null);
-    setFormObraId(obras.length > 0 ? obras[0].id : '');
+    setFormObraId(selectedObraId || (obras.length > 0 ? obras[0].id : ''));
     setFormData(new Date().toISOString().split('T')[0]);
     setFormStatusTrabalho('praticavel');
     setFormClimaManha('Ensolarado');
@@ -627,7 +627,7 @@ export default function RDOPage({ user }) {
                     <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800/80">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1">
                         <Package className="w-3.5 h-3.5 text-amber-400" />
-                        Insumos & Entregas Recebidas
+                        Materiais & Entregas Recebidas
                       </span>
                       <p className="text-slate-300 leading-relaxed whitespace-pre-line">
                         {rdo.materiais_utilizados || 'Sem registro de consumo ou recebimento especial no dia.'}
@@ -929,7 +929,7 @@ export default function RDOPage({ user }) {
             />
           </div>
 
-          {/* Seção 4: Insumos e Equipamentos */}
+          {/* Seção 4: Materiais e Equipamentos */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-slate-900/50 border border-slate-800 space-y-2">
               <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">

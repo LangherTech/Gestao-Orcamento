@@ -14,16 +14,20 @@ import {
 } from 'lucide-react';
 
 export const navigationItems = [
-  { id: 'dashboard', label: 'Dashboards', icon: LayoutDashboard },
-  { id: 'obras', label: 'Obras', icon: Building2 },
+  // 1. Pré-obra / Visitas
+  { id: 'visitas', label: 'Visitas & Prospecção', icon: Building2 },
+  // 2. Orçamento
   { id: 'servicos', label: 'Serviços & Orçamento', icon: FileSpreadsheet },
+  // 3. Gestão / Acompanhamento macro
+  { id: 'obras', label: 'Obras', icon: Building2 },
+  { id: 'dashboard', label: 'Dashboards', icon: LayoutDashboard },
+  { id: 'financeiro', label: 'Financeiro & Caixa', icon: DollarSign },
+  // 4. Execução de campo
   { id: 'cronograma', label: 'Cronograma', icon: CalendarDays },
-  { id: 'rdo', label: 'Diário de Obra (RDO)', icon: ClipboardList },
   { id: 'compras', label: 'Compras & Insumos', icon: ShoppingCart },
   { id: 'gestao', label: 'Terceiros', icon: HardHat },
+  { id: 'rdo', label: 'Diário de Obra (RDO)', icon: ClipboardList },
   { id: 'calendario', label: 'Equipe & Calendário', icon: Users2 },
-  { id: 'visitas', label: 'Visitas & Prospecção', icon: Building2 }, // Using Building2 or MapPin (not imported)
-  { id: 'financeiro', label: 'Financeiro & Caixa', icon: DollarSign },
 ];
 
 export default function Sidebar({ activeTab, setActiveTab, isOpen, setIsOpen }) {

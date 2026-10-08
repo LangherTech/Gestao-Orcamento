@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 
-export default function ComprasPage({ obras = [], user }) {
+export default function ComprasPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('pedidos'); // 'painel' | 'pedidos' | 'fornecedores'
   const [pedidos, setPedidos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
@@ -43,7 +43,7 @@ export default function ComprasPage({ obras = [], user }) {
     setIsLoading(true);
     try {
       const [resPedidos, resForn] = await Promise.all([
-        api.get('/compras/pedidos'),
+        api.get(`/compras/pedidos${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`),
         api.get('/compras/fornecedores')
       ]);
       setPedidos(resPedidos.data || []);
@@ -58,7 +58,7 @@ export default function ComprasPage({ obras = [], user }) {
 
   useEffect(() => {
     fetchDados();
-  }, []);
+  }, [selectedObraId]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

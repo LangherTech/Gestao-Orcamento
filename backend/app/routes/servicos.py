@@ -4,11 +4,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from ..models.servicos import (
     ServicoCreate, ServicoUpdate, ServicoResponse, ServicoValoresUpdate,
-    MaterialCreate, MaterialUpdate, MaterialResponse,
-    ServicoMaterialInput,
     OrcamentoGerarRequest,
-    OrcamentoCreate, OrcamentoUpdate, OrcamentoStatusUpdate, OrcamentoResponse,
-    AssistenteDrywallInput, AssistenteDrywallItemResponse, AssistenteInsumoUpdate
+    OrcamentoCreate, OrcamentoUpdate, OrcamentoStatusUpdate, OrcamentoResponse
 )
 import math
 from ..middleware.auth import get_current_user
@@ -20,108 +17,7 @@ logger = logging.getLogger("edifica.servicos")
 router = APIRouter(prefix="/servicos", tags=["Serviços e Orçamento"])
 
 
-# ========================================
-# MATERIAIS (Catálogo de Insumos)
-# ========================================
 
-@router.get("/materiais", response_model=List[dict])
-async def list_materiais(
-    search: Optional[str] = Query(None, description="Busca pelo nome do material"),
-    user: dict = Depends(get_current_user)
-):
-    """Lista todos os materiais do catálogo."""
-    supabase = get_supabase_client()
-    if supabase:
-        try:
-            query = supabase.table("materiais").select("*").order("nome")
-            if search:
-                query = query.ilike("nome", f"%{search}%")
-            res = query.execute()
-            if res.data is not None:
-                return res.data
-        except Exception as e:
-            logger.warning(f"Erro ao listar materiais no Supabase: {e}")
-
-    # Mock data para desenvolvimento
-    return [
-        {"id": "m001", "nome": "Placa Drywall Standard ST 12.5mm", "unidade": "m²", "preco_medio": 22.50},
-        {"id": "m002", "nome": "Perfil Guia 70mm", "unidade": "barra", "preco_medio": 18.90},
-        {"id": "m003", "nome": "Perfil Montante 70mm", "unidade": "barra", "preco_medio": 17.50},
-        {"id": "m004", "nome": "Massa de Acabamento para Gesso", "unidade": "saco", "preco_medio": 42.00},
-        {"id": "m005", "nome": "Tinta Acrílica Premium Suvinil 18L", "unidade": "lata", "preco_medio": 320.00},
-        {"id": "m006", "nome": "Fundo Preparador 18L", "unidade": "lata", "preco_medio": 95.00},
-        {"id": "m007", "nome": "Lixa para Parede 100", "unidade": "un", "preco_medio": 2.50},
-        {"id": "m008", "nome": "Fita Telada Adesiva 50mm", "unidade": "rolo", "preco_medio": 14.00},
-        {"id": "m009", "nome": "Arame Galvanizado 18", "unidade": "kg", "preco_medio": 18.00},
-        {"id": "m010", "nome": "Gesso Cola 1kg", "unidade": "saco", "preco_medio": 8.50}
-    ]
-
-
-@router.post("/materiais", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def create_material(material: MaterialCreate, user: dict = Depends(get_current_user)):
-    """Cria um novo material no catálogo de insumos."""
-    supabase = get_supabase_client()
-    data = material.model_dump()
-    data["created_by"] = None if user.get("is_mock") else user.get("id")
-    if supabase:
-        res = supabase.table("materiais").insert(data).execute()
-        return res.data[0]
-    data["id"] = "m-new-001"
-    return data
-
-
-@router.put("/materiais/{material_id}", response_model=dict)
-async def update_material(material_id: UUID, material: MaterialUpdate, user: dict = Depends(get_current_user)):
-    """Atualiza um material existente e recalcula os custos dos serviços que o utilizam."""
-    supabase = get_supabase_client()
-    update_data = material.model_dump(exclude_unset=True)
-    if not update_data:
-        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar.")
-    
-    if supabase:
-        # Atualiza o material
-        res = supabase.table("materiais").update(update_data).eq("id", str(material_id)).execute()
-        if not res.data:
-            raise HTTPException(status_code=404, detail="Material não encontrado.")
-            
-        # Cascata de preço
-        novo_preco = update_data.get("preco_medio")
-        if novo_preco is not None:
-            # 1. Atualizar preco_unitario em servico_materiais
-            supabase.table("servico_materiais").update({"preco_unitario": novo_preco}).eq("material_id", str(material_id)).execute()
-            
-            # 2. Recalcular o custo_materiais e lucro dos serviços afetados
-            sm_res = supabase.table("servico_materiais").select("servico_id").eq("material_id", str(material_id)).execute()
-            if sm_res.data:
-                afetados = list(set([sm["servico_id"] for sm in sm_res.data]))
-                for s_id in afetados:
-                    mat_res = supabase.table("servico_materiais").select("quantidade, rendimento, preco_unitario").eq("servico_id", str(s_id)).execute()
-                    custo_mat = sum(float(m.get("quantidade", 0)) * float(m.get("preco_unitario", 0)) for m in (mat_res.data or []))
-                        
-                    srv_res = supabase.table("servicos").select("mao_de_obra, preco_total").eq("id", str(s_id)).execute()
-                    if srv_res.data:
-                        srv = srv_res.data[0]
-                        mao_de_obra = float(srv.get("mao_de_obra", 0))
-                        preco_total = float(srv.get("preco_total", 0))
-                        custo_total = custo_mat + mao_de_obra
-                        lucro_bruto = preco_total - custo_total
-                        margem = (lucro_bruto / preco_total * 100) if preco_total > 0 else 0.0
-                        
-                        supabase.table("servicos").update({
-                            "margem_lucro": margem
-                        }).eq("id", str(s_id)).execute()
-                        
-        return res.data[0]
-    return {"id": str(material_id), **update_data}
-
-
-@router.delete("/materiais/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_material(material_id: UUID, user: dict = Depends(get_current_user)):
-    """Remove um material do catálogo."""
-    supabase = get_supabase_client()
-    if supabase:
-        supabase.table("materiais").delete().eq("id", str(material_id)).execute()
-    return None
 
 
 # ========================================
@@ -409,7 +305,7 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
                     except Exception:
                         pass
 
-        if item.fornecido_por == "Cliente":
+        if item.fornecido_por == "Cliente" or (item.tipo == "insumo" and getattr(orcamento, 'fornecimento_materiais', 'edifica') == 'cliente'):
             sub_liquido = 0.0
         else:
             sub_liquido = preco_unit * item.quantidade
@@ -460,6 +356,7 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         "margem_bdi_percentual": orcamento.margem_bdi_percentual,
         "condicao_pagamento": orcamento.condicao_pagamento,
         "modo_exibicao": orcamento.modo_exibicao,
+        "fornecimento_materiais": getattr(orcamento, 'fornecimento_materiais', 'edifica'),
         "created_by": None if user.get("is_mock") else user.get("id"),
         "created_at": now_iso,
         "updated_at": now_iso,
@@ -471,15 +368,17 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             head_data = {k: v for k, v in orcamento_dict.items() if k != "itens"}
             res = supabase.table("orcamentos").insert(head_data).execute()
             if res.data:
-                created_head = res.data[0]
+                itens_to_insert = []
                 for it in itens_processados:
                     it_data = dict(it)
                     it_data["orcamento_id"] = created_head["id"]
-                    if "id" in it_data and it_data["id"].startswith("item-"):
+                    if "id" in it_data and str(it_data["id"]).startswith("item-"):
                         del it_data["id"]
                     if "subtotal" in it_data:
                         del it_data["subtotal"]
-                    supabase.table("orcamento_itens").insert(it_data).execute()
+                    itens_to_insert.append(it_data)
+                if itens_to_insert:
+                    supabase.table("orcamento_itens").insert(itens_to_insert).execute()
                 # Se aprovado e tem obra_id, trigger atualiza obra automaticamente
                 orcamento_dict["id"] = created_head["id"]
         except Exception as e:
@@ -509,7 +408,7 @@ async def update_orcamento(
             preco_unit = item.preco_unitario or 0.0
             descricao = item.descricao or "Item"
             
-            if item.fornecido_por == "Cliente":
+            if item.fornecido_por == "Cliente" or (item.tipo == "insumo" and getattr(orcamento, 'fornecimento_materiais', 'edifica') == 'cliente'):
                 sub_liquido = 0.0
             else:
                 sub_liquido = preco_unit * item.quantidade
@@ -548,7 +447,7 @@ async def update_orcamento(
     for key in ["obra_id", "cliente_nome", "cliente_contato", "cliente_telefone", "cliente_email", 
                 "cliente_endereco", "prazo_dias", "prazo_garantia", "objetivo", "validade_dias", 
                 "status", "observacoes", "notas", "impostos_percentual", "margem_bdi_percentual",
-                "condicao_pagamento", "modo_exibicao"]:
+                "condicao_pagamento", "modo_exibicao", "fornecimento_materiais"]:
         if getattr(orcamento, key) is not None:
             update_dict[key] = str(getattr(orcamento, key)) if key == "obra_id" else getattr(orcamento, key)
 
@@ -563,13 +462,16 @@ async def update_orcamento(
             # If itens provided, rewrite items
             if orcamento.itens is not None:
                 supabase.table("orcamento_itens").delete().eq("orcamento_id", str(orcamento_id)).execute()
+                itens_to_insert = []
                 for it_data_ref in itens_processados:
                     it_data = dict(it_data_ref)
-                    if it_data["id"].startswith("item-"):
+                    if "id" in it_data and str(it_data["id"]).startswith("item-"):
                         del it_data["id"]
                     if "subtotal" in it_data:
                         del it_data["subtotal"]
-                    supabase.table("orcamento_itens").insert(it_data).execute()
+                    itens_to_insert.append(it_data)
+                if itens_to_insert:
+                    supabase.table("orcamento_itens").insert(itens_to_insert).execute()
         except Exception as e:
             logger.warning(f"Erro ao atualizar orcamento no Supabase: {e}")
 
@@ -660,9 +562,7 @@ async def list_servicos(
     supabase = get_supabase_client()
     if supabase:
         try:
-            query = supabase.table("servicos").select(
-                "*, servico_materiais(*, materiais(*))"
-            ).order("created_at", desc=True)
+            query = supabase.table("servicos").select("*").order("created_at", desc=True)
             if obra_id:
                 query = query.eq("obra_id", str(obra_id))
             if categoria:
@@ -686,8 +586,6 @@ async def list_servicos(
             "preco_total": 145.00,
             "margem_lucro": 25.00,
             "mao_de_obra": 45.00,
-            "created_at": "2024-01-15T10:00:00Z",
-            "servico_materiais": []
         }
     ]
 
@@ -696,17 +594,13 @@ async def list_servicos(
 async def create_servico(servico: ServicoCreate, user: dict = Depends(get_current_user)):
     """Cadastra um novo serviço com materiais vinculados e cálculo bidirecional de margem."""
     supabase = get_supabase_client()
-    data = servico.model_dump()
-    materiais = data.pop("materiais", [])
-
     # Converter UUID obra_id para string se presente
     if data.get("obra_id"):
         data["obra_id"] = str(data["obra_id"])
     data["created_by"] = None if user.get("is_mock") else user.get("id")
 
     # Recalcula margem sobre venda se preco_total > 0 e margem_lucro não calculada
-    custo_mat = sum(float(m.get("quantidade", 1)) * float(m.get("preco_unitario", 0)) for m in materiais)
-    custo_tot = custo_mat + float(data.get("mao_de_obra", 0))
+    custo_tot = float(data.get("mao_de_obra", 0))
     preco_venda = float(data.get("preco_total", 0))
     if preco_venda > 0 and (data.get("margem_lucro") is None or data.get("margem_lucro") == 0.0):
         data["margem_lucro"] = round(((preco_venda - custo_tot) / preco_venda) * 100, 2)
@@ -715,25 +609,12 @@ async def create_servico(servico: ServicoCreate, user: dict = Depends(get_curren
         try:
             res = supabase.table("servicos").insert(data).execute()
             created = res.data[0]
-            # Inserir materiais vinculados se houver
-            if materiais:
-                for m in materiais:
-                    m["servico_id"] = created["id"]
-                    m["material_id"] = str(m["material_id"])
-                    supabase.table("servico_materiais").insert(m).execute()
-                # Retornar com materiais
-                full = supabase.table("servicos").select(
-                    "*, servico_materiais(*, materiais(*))"
-                ).eq("id", created["id"]).execute()
-                return full.data[0] if full.data else created
-            created["servico_materiais"] = []
             return created
         except Exception as e:
             logger.error(f"Erro ao inserir serviço no Supabase: {e}")
             raise HTTPException(status_code=500, detail=f"Erro ao criar serviço: {str(e)}")
 
     data["id"] = "s-new-001"
-    data["servico_materiais"] = []
     return data
 
 
@@ -742,9 +623,7 @@ async def get_servico(servico_id: UUID, user: dict = Depends(get_current_user)):
     """Retorna detalhes completos de um serviço com seus materiais."""
     supabase = get_supabase_client()
     if supabase:
-        res = supabase.table("servicos").select(
-            "*, servico_materiais(*, materiais(*))"
-        ).eq("id", str(servico_id)).execute()
+        res = supabase.table("servicos").select("*").eq("id", str(servico_id)).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Serviço não encontrado.")
         return res.data[0]
@@ -805,9 +684,7 @@ async def update_servico(servico_id: UUID, servico: ServicoUpdate, user: dict = 
             if not res.data:
                 raise HTTPException(status_code=404, detail="Serviço não encontrado.")
         
-        full = supabase.table("servicos").select(
-            "*, servico_materiais(*, materiais(*))"
-        ).eq("id", str(servico_id)).execute()
+        full = supabase.table("servicos").select("*").eq("id", str(servico_id)).execute()
         return full.data[0] if full.data else {"id": str(servico_id), **update_data}
 
     return {"id": str(servico_id), **update_data}
@@ -828,19 +705,15 @@ async def update_servico_valores(
     update_data["updated_at"] = datetime.utcnow().isoformat()
     
     if supabase:
-        current = supabase.table("servicos").select("*, servico_materiais(*)").eq("id", str(servico_id)).execute()
+        current = supabase.table("servicos").select("*").eq("id", str(servico_id)).execute()
         if not current.data:
             raise HTTPException(status_code=404, detail="Serviço não encontrado.")
         
         curr_servico = current.data[0]
-        custo_materiais = sum(
-            float(m.get("quantidade", 0)) * float(m.get("preco_unitario", 0)) 
-            for m in curr_servico.get("servico_materiais", [])
-        )
         
         preco_venda = float(update_data.get("preco_total", curr_servico.get("preco_total", 0)))
         custo_terceiro = float(update_data.get("mao_de_obra", curr_servico.get("mao_de_obra", 0)))
-        custo_total = custo_materiais + custo_terceiro
+        custo_total = custo_terceiro
         
         if "margem_lucro" not in update_data:
             if preco_venda > 0:
@@ -852,8 +725,7 @@ async def update_servico_valores(
         if not res.data:
             raise HTTPException(status_code=404, detail="Erro ao atualizar valores do serviço.")
             
-        full = supabase.table("servicos").select("*, servico_materiais(*, materiais(*))").eq("id", str(servico_id)).execute()
-        return full.data[0] if full.data else res.data[0]
+        return res.data[0]
         
     return {"id": str(servico_id), **update_data}
 
@@ -869,209 +741,5 @@ async def delete_servico(servico_id: UUID, user: dict = Depends(get_current_user
     return None
 
 
-@router.post("/{servico_id}/materiais", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def add_material_to_servico(
-    servico_id: UUID,
-    material: ServicoMaterialInput,
-    user: dict = Depends(get_current_user)
-):
-    """Adiciona um material à composição de um serviço."""
-    supabase = get_supabase_client()
-    data = material.model_dump()
-    data["servico_id"] = str(servico_id)
-    data["material_id"] = str(data["material_id"])
-    if supabase:
-        res = supabase.table("servico_materiais").insert(data).execute()
-        return res.data[0]
-    data["id"] = "sm-new-001"
-    return data
 
 
-@router.delete("/{servico_id}/materiais/{composicao_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_material_from_servico(
-    servico_id: UUID,
-    composicao_id: UUID,
-    user: dict = Depends(get_current_user)
-):
-    """Remove um material da composição de um serviço."""
-    supabase = get_supabase_client()
-    if supabase:
-        supabase.table("servico_materiais").delete().eq("id", str(composicao_id)).execute()
-    return None
-
-# ========================================
-# ASSISTENTES
-# ========================================
-
-@router.get("/assistentes/insumos", response_model=List[dict])
-async def list_assistente_insumos(
-    assistente: Optional[str] = Query(None),
-    user: dict = Depends(get_current_user)
-):
-    supabase = get_supabase_client()
-    if not supabase:
-        return []
-    query = supabase.table("assistente_insumos").select("*, materiais(*)")
-    if assistente:
-        query = query.eq("assistente", assistente)
-    res = query.execute()
-    return res.data or []
-
-@router.put("/assistentes/insumos/{papel}", response_model=dict)
-async def update_assistente_insumo(
-    papel: str,
-    payload: AssistenteInsumoUpdate,
-    user: dict = Depends(get_current_user)
-):
-    supabase = get_supabase_client()
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Database error")
-    
-    res = supabase.table("assistente_insumos").update({
-        "material_id": str(payload.material_id),
-
-    }).eq("papel", papel).execute()
-    
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Insumo do assistente não encontrado")
-    return res.data[0]
-
-@router.post("/assistentes/drywall/calcular", response_model=List[AssistenteDrywallItemResponse])
-async def calcular_drywall(
-    input_data: AssistenteDrywallInput,
-    user: dict = Depends(get_current_user)
-):
-    supabase = get_supabase_client()
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Database not available")
-
-    # Fetch mappings and materials
-    res = supabase.table("assistente_insumos").select("*, materiais(id, nome, unidade, preco_medio)").eq("assistente", "drywall").execute()
-    mapeamentos = { item["papel"]: item for item in res.data } if res.data else {}
-    
-    # Fetch embalagens for these materials
-    mat_ids = [m["materiais"]["id"] for m in mapeamentos.values() if m.get("materiais")]
-    embalagens_por_mat = {}
-    if mat_ids:
-        emb_res = supabase.table("insumo_embalagens").select("*").in_("material_id", mat_ids).execute()
-        for emb in (emb_res.data or []):
-            mid = emb["material_id"]
-            if mid not in embalagens_por_mat:
-                embalagens_por_mat[mid] = []
-            embalagens_por_mat[mid].append(emb)
-
-    PERDA = input_data.perda_percentual / 100.0
-    linhas = []
-
-    def adicionar_linha(papel, qtd_liquida_uso, descricao_fallback):
-        map_item = mapeamentos.get(papel)
-        unidade_uso = map_item.get("unidade_uso", "un") if map_item else "un"
-        mat = map_item.get("materiais") if map_item else None
-        
-        qtd_com_perda = qtd_liquida_uso * (1 + PERDA)
-        embalagens_recomendadas = []
-        qtd_compra = 0.0
-        preco_unitario = 0.0
-        sobra_unidades = 0.0
-        embalagem_id = None
-        
-        if mat:
-            embs = embalagens_por_mat.get(mat["id"], [])
-            # Sort packaging by qty to optimize
-            embs_sorted = sorted(embs, key=lambda x: x["quantidade_unidades"], reverse=True)
-            
-            restante = qtd_com_perda
-            escolhidas = {}
-            for emb in embs_sorted:
-                if restante <= 0: break
-                qtd_emb = math.floor(restante / emb["quantidade_unidades"])
-                if qtd_emb > 0:
-                    escolhidas[emb["id"]] = {"emb": emb, "qtd": qtd_emb}
-                    restante -= qtd_emb * emb["quantidade_unidades"]
-            
-            if restante > 0 and embs_sorted:
-                smallest = embs_sorted[-1]
-                for emb in reversed(embs_sorted):
-                    if emb["quantidade_unidades"] >= restante:
-                        smallest = emb
-                        break
-                if smallest["id"] in escolhidas:
-                    escolhidas[smallest["id"]]["qtd"] += 1
-                else:
-                    escolhidas[smallest["id"]] = {"emb": smallest, "qtd": 1}
-                restante -= smallest["quantidade_unidades"]
-            
-            sobra_unidades = -restante if restante < 0 else 0.0
-            
-            for eid, data in escolhidas.items():
-                embalagens_recomendadas.append({
-                    "id": eid,
-                    "nome": data["emb"]["nome"],
-                    "quantidade": data["qtd"],
-                    "quantidade_unidades": data["emb"]["quantidade_unidades"],
-                    "preco": data["emb"]["preco"],
-                    "unidade_compra": data["emb"]["unidade_compra"]
-                })
-                qtd_compra += data["qtd"]
-                
-            if len(embalagens_recomendadas) >= 1:
-                embalagem_id = embalagens_recomendadas[0]["id"]
-                preco_unitario = embalagens_recomendadas[0]["preco"]
-
-        linhas.append(AssistenteDrywallItemResponse(
-            papel=papel,
-            descricao=mat["nome"] if mat else descricao_fallback,
-            material_id=map_item.get("material_id") if map_item else None,
-            unidade=mat["unidade"] if mat else unidade_uso,
-            qtd_liquida_uso=qtd_liquida_uso,
-            unidade_uso=unidade_uso,
-            qtd_compra=qtd_compra,
-            preco_unitario=preco_unitario,
-            fornecido_por="Edifica",
-            sem_vinculo=(mat is None),
-            embalagens_recomendadas=embalagens_recomendadas,
-            embalagem_id=embalagem_id,
-            sobra_unidades=sobra_unidades
-        ))
-
-    # Lógica base
-    area = input_data.area_m2
-    comp = input_data.comprimento_m
-    pe_dir = input_data.pe_direito_m
-
-    # Placas
-    area_placa = 1.20 * 1.80
-    if input_data.formato_placa == "1.20 x 1.80":
-        area_placa = 2.16
-    elif input_data.formato_placa == "1.20 x 2.40":
-        area_placa = 2.88
-    
-    qtd_placas = (area * 2) / area_placa
-    papel_placa = f"placa_{input_data.tipo_placa.lower()}"
-    adicionar_linha(papel_placa, qtd_placas, f"Placa de Gesso {input_data.tipo_placa} {input_data.formato_placa}")
-
-    if input_data.modo == "exato":
-        qtd_montantes = math.ceil(comp / (input_data.modulacao_mm / 1000.0)) + 1
-        qtd_montantes += (input_data.n_vaos * 2)
-        qtd_montantes += input_data.n_quinas_t
-        adicionar_linha("montante", qtd_montantes, "Montante 70mm")
-        
-        qtd_guias = comp * 2
-        adicionar_linha("guia", qtd_guias, "Guia 70mm")
-    else:
-        coef = 1.8 if input_data.modulacao_mm == 600 else 2.8
-        metros_montante = area * coef
-        qtd_montantes = metros_montante / 3.0
-        adicionar_linha("montante", qtd_montantes, "Montante 70mm")
-        
-        metros_guia = area * (2 / pe_dir)
-        adicionar_linha("guia", metros_guia, "Guia 70mm")
-
-    adicionar_linha("parafuso_gn25", area * 29.0, "Parafuso TA25 (GN25)")
-    adicionar_linha("parafuso_lb", area * 7.0, "Parafuso TR13 (LB)")
-    adicionar_linha("bucha", area * 1.75, "Bucha com Parafuso")
-    adicionar_linha("fita", area * 3.15, "Fita Telada/Papel")
-    adicionar_linha("massa", area * 0.95, "Massa para Drywall")
-    adicionar_linha("banda", comp * 2, "Banda Acústica")
-
-    return linhas

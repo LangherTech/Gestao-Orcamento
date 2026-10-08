@@ -1,5 +1,6 @@
 from .obras import ObraBase, ObraCreate, ObraUpdate, ObraResponse
-from .servicos import ServicoBase, ServicoCreate, ServicoResponse, MaterialBase, MaterialResponse
+from .servicos import ServicoBase, ServicoCreate, ServicoResponse
+from .materiais import MaterialBase, MaterialResponse
 from .financeiro import ReceitaBase, ReceitaCreate, ReceitaResponse, CaixaPequenoBase, CaixaPequenoCreate, CaixaPequenoResponse
 from .rdo import RDOBase, RDOCreate, RDOResponse
 from .compras import PedidoCompraBase, PedidoCompraCreate, PedidoCompraResponse

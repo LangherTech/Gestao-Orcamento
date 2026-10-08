@@ -4,53 +4,6 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 
 
-# ========================================
-# Materiais (Catálogo de Insumos)
-# ========================================
-class MaterialBase(BaseModel):
-    nome: str = Field(..., max_length=255)
-    unidade: str = Field(..., max_length=20, description="ML, M², M³, Unidade")
-    preco_medio: float = Field(0.00, ge=0)
-
-class MaterialCreate(MaterialBase):
-    pass
-
-class MaterialUpdate(BaseModel):
-    nome: Optional[str] = Field(None, max_length=255)
-    unidade: Optional[str] = Field(None, max_length=20)
-    preco_medio: Optional[float] = Field(None, ge=0)
-
-class MaterialResponse(MaterialBase):
-    id: UUID
-    created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-
-# ========================================
-# Composição de Insumos do Serviço
-# ========================================
-class ServicoMaterialInput(BaseModel):
-    material_id: UUID
-    quantidade: float = Field(1.0, ge=0)
-    rendimento: float = Field(1.0, gt=0)
-    preco_unitario: float = Field(0.0, ge=0)
-
-class ServicoMaterialResponse(BaseModel):
-    id: UUID
-    servico_id: UUID
-    material_id: UUID
-    quantidade: float
-    rendimento: float
-    preco_unitario: float
-    subtotal: Optional[float] = None
-    # Dados do material via join
-    material_nome: Optional[str] = None
-    material_unidade: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ========================================
@@ -67,7 +20,7 @@ class ServicoBase(BaseModel):
     mao_de_obra: float = Field(0.00, ge=0, description="Custo da mão de obra do terceiro/empreiteiro por unidade (ex: R$ 50,00)")
 
 class ServicoCreate(ServicoBase):
-    materiais: Optional[List[ServicoMaterialInput]] = []
+    pass
 
 class ServicoUpdate(BaseModel):
     obra_id: Optional[UUID] = None
@@ -78,7 +31,6 @@ class ServicoUpdate(BaseModel):
     preco_total: Optional[float] = Field(None, ge=0)
     margem_lucro: Optional[float] = None
     mao_de_obra: Optional[float] = Field(None, ge=0)
-    materiais: Optional[List[ServicoMaterialInput]] = None
 
 class ServicoValoresUpdate(BaseModel):
     preco_total: Optional[float] = Field(None, ge=0, description="Preço de venda ao cliente")
@@ -105,12 +57,12 @@ class OrcamentoItemInput(BaseModel):
     descricao: Optional[str] = None
     quantidade: float = Field(1.0, ge=0)
     preco_unitario: Optional[float] = Field(0.0, ge=0)
-    fornecido_por: str = "Edifica"
     unidade: Optional[str] = None
     preco_catalogo: Optional[float] = None
     embalagem_id: Optional[UUID] = None
     origem_assistente: Optional[bool] = False
     assistente_execucao_id: Optional[str] = None
+    fornecido_por: Optional[str] = Field("Edifica", description="Edifica ou Cliente")
 
 class OrcamentoItemResponse(BaseModel):
     id: Optional[str] = None
@@ -121,12 +73,12 @@ class OrcamentoItemResponse(BaseModel):
     descricao: str
     quantidade: float
     preco_unitario: float
-    fornecido_por: str = "Edifica"
     unidade: Optional[str] = None
     preco_catalogo: Optional[float] = None
     embalagem_id: Optional[str] = None
     origem_assistente: Optional[bool] = False
     assistente_execucao_id: Optional[str] = None
+    fornecido_por: Optional[str] = "Edifica"
     subtotal: float
 
 class OrcamentoCreate(BaseModel):
@@ -148,6 +100,7 @@ class OrcamentoCreate(BaseModel):
     margem_bdi_percentual: float = Field(0.0, ge=0)
     condicao_pagamento: Optional[str] = None
     modo_exibicao: Optional[str] = Field("resumido", description="resumido ou detalhado")
+    fornecimento_materiais: str = Field("edifica", description="edifica ou cliente")
     itens: List[OrcamentoItemInput] = []
 
 class OrcamentoUpdate(BaseModel):
@@ -168,6 +121,7 @@ class OrcamentoUpdate(BaseModel):
     margem_bdi_percentual: Optional[float] = None
     condicao_pagamento: Optional[str] = None
     modo_exibicao: Optional[str] = None
+    fornecimento_materiais: Optional[str] = None
     itens: Optional[List[OrcamentoItemInput]] = None
 
 class OrcamentoStatusUpdate(BaseModel):
@@ -195,6 +149,7 @@ class OrcamentoResponse(BaseModel):
     margem_bdi_percentual: float = 0.0
     condicao_pagamento: Optional[str] = None
     modo_exibicao: Optional[str] = "resumido"
+    fornecimento_materiais: str = "edifica"
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -213,37 +168,6 @@ class OrcamentoGerarRequest(BaseModel):
     impostos_percentual: float = Field(0.0, ge=0)
     margem_bdi_percentual: float = Field(0.0, ge=0)
     validade_dias: int = Field(30, ge=1)
+    fornecimento_materiais: str = Field("edifica", description="edifica ou cliente")
 
-# ========================================
-# Assistente de Cálculo
-# ========================================
 
-class AssistenteDrywallInput(BaseModel):
-    modo: str = Field("rapido", description="rapido ou exato")
-    area_m2: float
-    comprimento_m: float
-    pe_direito_m: float = 2.70
-    n_vaos: int = 0
-    n_quinas_t: int = 0
-    modulacao_mm: int = 600
-    formato_placa: str
-    tipo_placa: str = Field("ST", description="ST, RU, ou RF")
-    perda_percentual: float = 10.0
-
-class AssistenteDrywallItemResponse(BaseModel):
-    papel: str
-    descricao: str
-    material_id: Optional[UUID] = None
-    unidade: Optional[str] = None
-    qtd_liquida_uso: float
-    unidade_uso: str
-    qtd_compra: float
-    preco_unitario: Optional[float] = None
-    fornecido_por: str = "Edifica"
-    sem_vinculo: bool = False
-    embalagens_recomendadas: List[dict] = []
-    embalagem_id: Optional[UUID] = None
-    sobra_unidades: Optional[float] = 0.0
-
-class AssistenteInsumoUpdate(BaseModel):
-    material_id: UUID

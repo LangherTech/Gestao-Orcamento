@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListChecks, Trash2 } from 'lucide-react';
+import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListChecks, Trash2, Printer } from 'lucide-react';
 import api from '../services/api';
+import { exportCronogramaPDF, exportCronogramaTabelaPDF } from '../components/CronogramaPDF';
 
 export default function CronogramaPage({ selectedObraId }) {
   const [etapas, setEtapas] = useState([]);
@@ -11,8 +12,7 @@ export default function CronogramaPage({ selectedObraId }) {
   const [formEtapa, setFormEtapa] = useState({
     nome: '',
     data_prevista_inicio: '',
-    data_prevista_fim: '',
-    custo_previsto: ''
+    data_prevista_fim: ''
   });
 
   const fetchData = async () => {
@@ -40,13 +40,10 @@ export default function CronogramaPage({ selectedObraId }) {
         obra_id: selectedObraId,
         nome: formEtapa.nome,
         data_prevista_inicio: formEtapa.data_prevista_inicio || null,
-        data_prevista_fim: formEtapa.data_prevista_fim || null,
-        custo_previsto: parseFloat(formEtapa.custo_previsto) || 0,
-        custo_real: 0,
-        percentual_conclusao: 0
+        data_prevista_fim: formEtapa.data_prevista_fim || null
       });
       setIsModalOpen(false);
-      setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '', custo_previsto: '' });
+      setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '' });
       fetchData();
     } catch (error) {
       console.error("Erro ao criar etapa:", error);
@@ -66,17 +63,22 @@ export default function CronogramaPage({ selectedObraId }) {
     }
   };
 
-  const updateProgresso = async (id, progresso) => {
+  const handleToggleEtapaStatus = async (id, isStart, isFinish) => {
     try {
-      await api.put(`/cronograma/etapas/${id}`, {
-        percentual_conclusao: parseFloat(progresso)
-      });
+      const data = {};
+      const now = new Date().toISOString().split('T')[0];
+      if (isStart) data.data_real_inicio = now;
+      if (isFinish) data.data_real_fim = now;
+      
+      await api.put(`/cronograma/etapas/${id}`, data);
       fetchData();
     } catch (error) {
-      console.error("Erro ao atualizar progresso:", error);
-      alert("Falha ao atualizar avanço da etapa.");
+      console.error("Erro ao atualizar etapa:", error);
+      alert("Falha ao atualizar o status da etapa.");
     }
   };
+
+
 
   const formatMoney = (val) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -89,9 +91,9 @@ export default function CronogramaPage({ selectedObraId }) {
     return date.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
   };
 
-  const getStatus = (progresso) => {
-    if (progresso >= 100) return { label: 'Concluído', class: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-    if (progresso > 0) return { label: 'Em Andamento', class: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
+  const getStatus = (etapa) => {
+    if (etapa.data_real_fim) return { label: 'Concluído', class: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
+    if (etapa.data_real_inicio) return { label: 'Em Andamento', class: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
     return { label: 'A Iniciar', class: 'bg-slate-800 text-slate-400 border border-slate-700' };
   };
 
@@ -99,9 +101,9 @@ export default function CronogramaPage({ selectedObraId }) {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Cronograma Físico-Financeiro</h2>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Cronograma Físico</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Controle de etapas, linha do tempo, avanço físico e custo de execução.
+            Controle de etapas e prazos de execução.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -111,6 +113,24 @@ export default function CronogramaPage({ selectedObraId }) {
           >
             <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin text-emerald-500' : ''}`} />
           </button>
+          <div className="flex gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            <button 
+              onClick={() => exportCronogramaPDF(etapas, "Obra Selecionada")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+              title="Gráfico de Gantt"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Gantt</span>
+            </button>
+            <button 
+              onClick={() => exportCronogramaTabelaPDF(etapas, "Obra Selecionada")}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
+              title="Tabela de Prazos"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Tabela</span>
+            </button>
+          </div>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
@@ -136,7 +156,7 @@ export default function CronogramaPage({ selectedObraId }) {
         )}
 
         {etapas.map((etapa) => {
-          const status = getStatus(etapa.percentual_conclusao);
+          const status = getStatus(etapa);
           return (
             <div key={etapa.id} className="glass-card p-5 rounded-2xl hover:border-slate-700/80 transition-colors group">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
@@ -151,14 +171,17 @@ export default function CronogramaPage({ selectedObraId }) {
                   </div>
                   <h3 className="text-base font-bold text-white">{etapa.nome}</h3>
                 </div>
-
-                <div className="flex items-center gap-4 text-xs">
-                  <div className="text-right">
-                    <span className="text-slate-400 block text-[10px] uppercase tracking-wider">Custo Previsto vs Real</span>
-                    <span className="font-semibold text-slate-200">
-                      {formatMoney(etapa.custo_real)} / {formatMoney(etapa.custo_previsto)}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  {!etapa.data_real_inicio && !etapa.data_real_fim && (
+                    <button onClick={() => handleToggleEtapaStatus(etapa.id, true, false)} className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                      Iniciar
+                    </button>
+                  )}
+                  {etapa.data_real_inicio && !etapa.data_real_fim && (
+                    <button onClick={() => handleToggleEtapaStatus(etapa.id, false, true)} className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                      Concluir
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDeleteEtapa(etapa.id, etapa.nome)}
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
@@ -166,39 +189,6 @@ export default function CronogramaPage({ selectedObraId }) {
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="space-y-2 mt-4">
-                <div className="flex justify-between items-end text-xs text-slate-400">
-                  <span className="flex gap-2">Avanço Físico 
-                    <span className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                       (Atualizar ➔)
-                    </span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      min="0" max="100" 
-                      className="w-16 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-right text-white focus:border-emerald-500 outline-none"
-                      defaultValue={etapa.percentual_conclusao}
-                      onBlur={(e) => {
-                        if (e.target.value !== String(etapa.percentual_conclusao)) {
-                           updateProgresso(etapa.id, e.target.value);
-                        }
-                      }}
-                    />
-                    <span className="font-bold text-white">%</span>
-                  </div>
-                </div>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      etapa.percentual_conclusao >= 100 ? 'bg-emerald-500' : 'bg-blue-500'
-                    }`}
-                    style={{ width: `${etapa.percentual_conclusao}%` }}
-                  ></div>
                 </div>
               </div>
             </div>
@@ -231,10 +221,7 @@ export default function CronogramaPage({ selectedObraId }) {
                   <input type="date" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors [color-scheme:dark]" value={formEtapa.data_prevista_fim} onChange={e => setFormEtapa({...formEtapa, data_prevista_fim: e.target.value})} />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-1">Custo Previsto (R$)</label>
-                <input type="number" step="0.01" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500 transition-colors" placeholder="0.00" value={formEtapa.custo_previsto} onChange={e => setFormEtapa({...formEtapa, custo_previsto: e.target.value})} />
-              </div>
+
               
               <div className="pt-2 flex gap-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors cursor-pointer">Cancelar</button>

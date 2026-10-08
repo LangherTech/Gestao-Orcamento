@@ -8,7 +8,7 @@ import {
 import api from '../services/api';
 import { formatTelefone, formatCPF } from '../utils/masks';
 
-export default function CalendarioPage({ obras = [], user }) {
+export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('funcionarios'); // 'funcionarios' | 'profissoes' | 'alocacoes' | 'visao_mensal' | 'equipes' | 'pagamentos'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [funcionarios, setFuncionarios] = useState([]);
@@ -89,7 +89,7 @@ export default function CalendarioPage({ obras = [], user }) {
   const [funcForm, setFuncForm] = useState(initialFuncForm);
 
   const initialAlocForm = {
-    obra_id: '',
+    obra_id: selectedObraId || '',
     funcionario_id: '',
     data_inicio: new Date().toISOString().split('T')[0],
     data_fim: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -142,7 +142,7 @@ export default function CalendarioPage({ obras = [], user }) {
     try {
       const [funcRes, alocRes, equipesRes, pagRes, profRes, faltasRes, contratosRes] = await Promise.all([
         api.get('/calendario/funcionarios'),
-        api.get('/calendario/alocacoes'),
+        api.get(`/calendario/alocacoes${selectedObraId ? `?obra_id=${selectedObraId}` : ''}`),
         api.get('/calendario/equipes'),
         api.get('/calendario/pagamentos'),
         api.get('/calendario/profissoes'),
@@ -167,7 +167,7 @@ export default function CalendarioPage({ obras = [], user }) {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedObraId]);
 
   const handleToggleFalta = async (funcionarioId, obraId, dataStr, motivo = 'Falta informada') => {
     try {

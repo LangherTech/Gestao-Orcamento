@@ -48,7 +48,7 @@ export default function AssistenteDrywallModal({ onClose, onAddInsumos, materiai
         perda_percentual: Number(perda) || 0
       };
       
-      const res = await api.post('/servicos/assistentes/drywall/calcular', payload);
+      const res = await api.post('/materiais/assistentes/drywall/calcular', payload);
       // Aplicar fornecedor global aos resultados
       const dados = res.data.map(item => ({
         ...item,
@@ -83,7 +83,7 @@ export default function AssistenteDrywallModal({ onClose, onAddInsumos, materiai
       const mat = materiaisCatalog.find(m => m.id === materialId);
       if (mat) {
         // Envia para o backend para salvar vínculo (simplificado com fator 1 por padrão se for novo vínculo)
-        await api.put(`/servicos/assistentes/insumos/${item.papel}`, {
+        await api.put(`/materiais/assistentes/insumos/${item.papel}`, {
           material_id: materialId
         });
         // Atualiza a linha
@@ -220,13 +220,7 @@ export default function AssistenteDrywallModal({ onClose, onAddInsumos, materiai
                   <label className="block text-[10px] text-slate-400 mb-1 uppercase">Perda (%)</label>
                   <input type="number" value={perda} onChange={e => setPerda(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white" />
                 </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-1 uppercase">Fornecimento Padrão</label>
-                  <select value={fornecedorGlobal} onChange={e => setFornecedorGlobal(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white">
-                    <option value="Edifica">Edifica</option>
-                    <option value="Cliente">Cliente</option>
-                  </select>
-                </div>
+
               </div>
             </div>
           </div>
@@ -254,7 +248,7 @@ export default function AssistenteDrywallModal({ onClose, onAddInsumos, materiai
                         <th className="px-4 py-3 font-semibold text-center w-32" title="Quantidade líquida (uso)">Qtd Líq.</th>
                         <th className="px-4 py-3 font-semibold text-center w-36" title="Quantidade para compra">Compra</th>
                         <th className="px-4 py-3 font-semibold w-32 text-center">R$ Unit.</th>
-                        <th className="px-4 py-3 font-semibold w-40 text-center">Fornecimento</th>
+
                       </tr>
                     </thead>
                     <tbody className="text-xs">
@@ -300,19 +294,7 @@ export default function AssistenteDrywallModal({ onClose, onAddInsumos, materiai
                               disabled={r.sem_vinculo}
                             />
                           </td>
-                          <td className="px-3 py-2.5">
-                            <button
-                              onClick={() => handleUpdateItem(i, 'fornecido_por', r.fornecido_por === 'Edifica' ? 'Cliente' : 'Edifica')}
-                              className={`w-full py-1 text-[10px] font-bold rounded flex items-center justify-center gap-1 transition-all ${
-                                r.fornecido_por === 'Edifica' 
-                                  ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-                              }`}
-                            >
-                              {r.fornecido_por === 'Edifica' ? <Building className="w-3 h-3" /> : null}
-                              {r.fornecido_por}
-                            </button>
-                          </td>
+
                         </tr>
                       ))}
                     </tbody>

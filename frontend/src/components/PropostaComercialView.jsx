@@ -14,14 +14,14 @@ export function EdificaOfficialLogo({ className = "h-12", isPrint = false }) {
       <img
         src={COMPANY_LOGO_URL}
         alt="Edifica Soluções em Obras"
-        className={`${className} object-contain mx-auto`}
+        className={(className) + " object-contain mx-auto"}
       />
     );
   }
 
   // Símbolo vetorial estilizado fiel à identidade visual da Edifica
   return (
-    <div className={`flex flex-col items-center justify-center select-none ${className}`}>
+    <div className={"flex flex-col items-center justify-center select-none " + (className)}>
       <div className="flex items-center gap-3">
         {/* Ícone Arquitetônico Edifica */}
         <svg className="w-10 h-10 shrink-0 text-[#0e2744]" viewBox="0 0 100 100" fill="currentColor">
@@ -70,6 +70,60 @@ export const EDIFICA_COMPANY_DATA = {
   }
 };
 
+// Helper para obter os dados do emissor da proposta de acordo com o usuário logado
+export function getDadosEmissor(data = {}) {
+  // 1. Se foi informado explicitamente responsavel no objeto data
+  let isGuilherme = false;
+  if (data?.responsavel) {
+    const r = String(data.responsavel).toLowerCase();
+    if (r.includes('guilherme')) isGuilherme = true;
+  }
+
+  // 2. Se foi passado user ou email no objeto data
+  if (!isGuilherme) {
+    const userCandidate = data?.user || data?.usuario || data?.criado_por;
+    if (userCandidate) {
+      const email = typeof userCandidate === 'string' ? userCandidate : (userCandidate.email || '');
+      if (email.toLowerCase().includes('guilherme')) isGuilherme = true;
+    }
+  }
+
+  // 3. Fallback inteligente: buscar usuário conectado no localStorage (Supabase Auth)
+  if (!isGuilherme) {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase.auth.token') || key.includes('-auth-token'))) {
+          const item = JSON.parse(localStorage.getItem(key));
+          const email = item?.user?.email || item?.currentSession?.user?.email || '';
+          if (email.toLowerCase().includes('guilherme')) {
+            isGuilherme = true;
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (isGuilherme) {
+    return {
+      responsavel: 'Guilherme Langher',
+      telefone: '(47) 99603-7887',
+      email: 'guilherme@solucoesedifica.com.br'
+    };
+  }
+
+  return {
+    responsavel: 'Márcio Gil Paycorich',
+    telefone: '(47) 99138-7244',
+    email: 'marcio@solucoesedifica.com.br'
+  };
+}
+
+export function getResponsavelNome(data = {}) {
+  return getDadosEmissor(data).responsavel;
+}
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
@@ -94,11 +148,17 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
     objetivoCustom = '',
     observacoesCustom = '',
     condicoesPagamentoCustom = '',
+    fornecimentoMateriais = 'edifica',
   } = data;
 
   const contatoExibicao = [clienteTelefone, clienteEmail].filter(Boolean).join(' • ') || clienteContato || '(47) 99138-7244';
+  const emissor = getDadosEmissor(data);
+  const responsavelAssinatura = emissor.responsavel;
 
-  const itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
+  let itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
+  if (fornecimentoMateriais === 'cliente') {
+    itensAtivos = itensAtivos.filter(i => i.tipo !== 'insumo');
+  }
 
   const objetivoTexto = objetivoCustom || (itensAtivos.length > 0
     ? `Execução dos serviços de ${itensAtivos.map(i => i.servico_nome).join(', ')} contemplando:`
@@ -130,7 +190,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
     <div style="text-align: center; font-size: 8.5pt; font-weight: 600; color: #475569; line-height: 1.45; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 24px;">
       <div>RUA BENJAMIN CONSTANT, 641</div>
       <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
-      <div>(47) 99138-7244</div>
+      <div>${emissor.telefone}</div>
     </div>
   `;
 
@@ -217,8 +277,8 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
             <div style="margin-bottom: 16px;">
               <div style="font-weight: 800; font-size: 10.5pt; color: #0f172a;">EDIFICA SOLUÇÕES EM OBRAS</div>
               <div>CNPJ: 62.829.765/0001-96</div>
-              <div>Telefone: (47) 99138-7244</div>
-              <div>E-mail: marcio@solucoesedifica.com.br</div>
+              <div>Telefone: ${emissor.telefone}</div>
+              <div>E-mail: ${emissor.email}</div>
             </div>
 
             <div style="margin-bottom: 18px;">
@@ -236,7 +296,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
 
             <div class="section-title">2. SERVIÇOS A EXECUTAR</div>
             <div style="margin-bottom: 12px;">
-              ${itensAtivos.length > 0 ? itensAtivos.map(i => `
+              ${itensAtivos.filter(i => i.tipo === 'servico').length > 0 ? itensAtivos.filter(i => i.tipo === 'servico').map(i => `
                 <div class="check-item">
                   <span class="check-mark">✓</span>
                   <span>${i.servico_nome}${i.quantidade > 1 ? ` (${i.quantidade} un)` : ''};</span>
@@ -276,7 +336,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
             <div class="section-title" style="margin-top: 10px;">5. VALORES</div>
             <div class="check-item" style="margin-bottom: 8px;">
               <span class="check-mark">✓</span>
-              <span>Os valores abaixo contemplam mão de obra especializada e insumos para execução dos trabalhos, citados acima.</span>
+              <span>${fornecimentoMateriais === 'cliente' ? 'Os valores abaixo contemplam mão de obra especializada.' : 'Os valores abaixo contemplam mão de obra especializada e insumos para execução dos trabalhos, citados acima.'}</span>
             </div>
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
@@ -284,18 +344,17 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
                 const bdi = margemBdiPercentual || 0;
                 const imp = impostosPercentual || 0;
                 const fatorAcrescimo = 1 + ((bdi + imp) / 100);
-                const isCliente = i.fornecido_por === 'Cliente';
-                const sub = isCliente ? 0 : i.preco_unitario * i.quantidade * fatorAcrescimo;
-                const unitFinal = isCliente ? 0 : i.preco_unitario * fatorAcrescimo;
+                const sub = i.preco_unitario * i.quantidade * fatorAcrescimo;
+                const unitFinal = i.preco_unitario * fatorAcrescimo;
                 
                 let html = `
                   <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 9.8pt; border-bottom: 1px dashed #e2e8f0;">
-                    <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''} ${isCliente ? '<span style="color:#d97706; font-size:8pt; font-weight:bold; margin-left:4px;">(Fornecido pelo Cliente)</span>' : ''}</span>
-                    <span style="font-weight: 600;">${isCliente ? '-' : formatCurrency(sub)}</span>
+                    <span>${i.servico_nome} ${i.quantidade > 1 ? `<span style="color: #64748b;">(${i.quantidade} un)</span>` : ''}</span>
+                    <span style="font-weight: 600;">${formatCurrency(sub)}</span>
                   </div>
                 `;
 
-                if (modoVisualizacao === 'detalhado' && !isCliente) {
+                if (modoVisualizacao === 'detalhado') {
                     html += `
                       <div style="padding-left: 12px; margin-bottom: 8px; font-size: 8.5pt; color: #64748b; line-height: 1.4;">
                         <div><span style="font-weight: 600;">Valor Unitário:</span> ${formatCurrency(unitFinal)}</div>
@@ -322,6 +381,7 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
               <div class="check-item"><span class="check-mark">✓</span><span>O valor informado já inclui mão de obra, encargos, alimentação da equipe, deslocamento e impostos, não havendo custos adicionais ao cliente além do escopo contratado acima.</span></div>
               <div class="check-item"><span class="check-mark">✓</span><span>Caso haja alteração da área a proposta será refeita.</span></div>
               <div class="check-item"><span class="check-mark">✓</span><span>Serviços realizados conforme normas de segurança.</span></div>
+              ${fornecimentoMateriais === 'cliente' ? `<div class="check-item"><span class="check-mark">✓</span><span>Materiais e insumos não estão contemplados nesse orçamento, pois são de responsabilidade do contratante.</span></div>` : ''}
               ${observacoesCustom ? `<div class="check-item"><span class="check-mark">✓</span><span>${observacoesCustom}</span></div>` : ''}
             </div>
 
@@ -378,15 +438,18 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
             <div style="margin-top: 45px;">
               <div class="signature-line"></div>
               <div style="font-weight: 800; font-size: 10.5pt; color: #0f172a;">EDIFICA SOLUÇÕES EM OBRAS LTDA</div>
-              <div style="font-size: 9.8pt; color: #475569;">Márcio Gil Paycorich</div>
+              <div style="font-size: 9.8pt; color: #475569;">${responsavelAssinatura}</div>
             </div>
 
-            <div style="margin-top: 60px;">
-              <div style="font-size: 10pt; color: #0f172a; margin-bottom: 6px;">
-                De acordo: __________________________________________________________________
-              </div>
-              <div style="font-weight: 800; font-size: 10.5pt; color: #0f172a; margin-left: 80px;">
-                ${(clienteNome || 'NOME DO CLIENTE').toUpperCase()}
+            <div style="margin-top: 50px;">
+              <div style="display: flex; align-items: flex-start; gap: 8px;">
+                <span style="font-size: 10pt; color: #0f172a; font-weight: 500; white-space: nowrap; margin-top: 2px;">De acordo:</span>
+                <div style="width: 320px; display: flex; flex-direction: column; align-items: center;">
+                  <div style="width: 100%; border-bottom: 1px solid #334155; margin-top: 14px; margin-bottom: 6px;"></div>
+                  <div style="font-weight: 800; font-size: 10.5pt; color: #0f172a; text-align: center; width: 100%;">
+                    ${(clienteNome || 'NOME DO CLIENTE').toUpperCase()}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -394,6 +457,125 @@ export function printPropostaComercial(data, modoVisualizacao = 'resumido') {
           ${footerHtml}
         </div>
 
+      </body>
+    </html>
+  `);
+
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 400);
+}
+
+export function printListaMateriais(data) {
+  const {
+    clienteNome = '',
+    clienteEndereco = 'BLUMENAU',
+    clienteTelefone = '',
+    clienteEmail = '',
+    clienteContato = '',
+    dataEmissao = new Date().toLocaleDateString('pt-BR'),
+    itens = []
+  } = data;
+
+  const contatoExibicao = [clienteTelefone, clienteEmail].filter(Boolean).join(' • ') || clienteContato || '(47) 99138-7244';
+  
+  const insumos = itens.filter(i => i.tipo === 'insumo' && Number(i.quantidade) > 0);
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+
+  const logoHtml = COMPANY_LOGO_URL
+    ? `<img src="${COMPANY_LOGO_URL}" alt="Edifica" style="height: 52px; display: block; margin: 0 auto;" />`
+    : `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 24px;">
+        <svg style="width: 38px; height: 38px; color: #0e2744;" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M22 82V34L50 14L78 34V82H64V42L50 28L36 42V82H22Z" />
+          <rect x="44" y="46" width="12" height="36" rx="1" fill="currentColor" />
+        </svg>
+        <div style="text-align: left;">
+          <div style="font-size: 26px; font-weight: 900; color: #0e2744; line-height: 1; letter-spacing: -0.5px; font-family: 'Inter', Arial, sans-serif;">
+            Edifica
+          </div>
+          <div style="font-size: 8px; font-weight: 700; color: #475569; letter-spacing: 0.28em; text-transform: uppercase; margin-top: 4px; font-family: 'Inter', Arial, sans-serif;">
+            SOLUÇÕES EM OBRAS
+          </div>
+        </div>
+      </div>
+    `;
+
+  const emissorLista = getDadosEmissor(data);
+  const footerHtml = `
+    <div style="text-align: center; font-size: 8.5pt; font-weight: 600; color: #475569; line-height: 1.45; border-top: 1px solid #e2e8f0; padding-top: 12px; margin-top: 24px;">
+      <div>RUA BENJAMIN CONSTANT, 641</div>
+      <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
+      <div>${emissorLista.telefone}</div>
+    </div>
+  `;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <title>Lista de Materiais - ${clienteNome || 'Edifica'}</title>
+        <style>
+          @page { size: A4 portrait; margin: 10mm 15mm 10mm 15mm; }
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Inter', Arial, sans-serif; background: #fff; color: #334155; }
+          .a4-page { width: 210mm; min-height: 297mm; padding: 30mm 20mm; position: relative; display: flex; flex-direction: column; justify-content: space-between; margin: 0 auto; background: white; }
+          .section-title { font-weight: 800; font-size: 10.5pt; text-transform: uppercase; color: #0f172a; margin-bottom: 8px; border-bottom: 2px solid #0e2744; padding-bottom: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 9.5pt; }
+          th { text-align: left; background: #f8fafc; padding: 8px; border: 1px solid #e2e8f0; font-weight: bold; color: #0e2744; }
+          td { padding: 8px; border: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="a4-page">
+          <div>
+            ${logoHtml}
+            <h2 style="text-align: center; font-size: 14pt; font-weight: 900; color: #0e2744; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px;">
+              LISTA DE MATERIAIS PARA COMPRA
+            </h2>
+
+            <div style="margin-bottom: 24px; font-size: 9.5pt; line-height: 1.6;">
+              <p><span style="font-weight: bold; color: #0f172a;">Cliente:</span> ${clienteNome || 'Não informado'}</p>
+              <p><span style="font-weight: bold; color: #0f172a;">Data:</span> ${dataEmissao}</p>
+              <p><span style="font-weight: bold; color: #0f172a;">Endereço:</span> ${clienteEndereco || 'Não informado'}</p>
+              <p><span style="font-weight: bold; color: #0f172a;">Contato:</span> ${contatoExibicao}</p>
+            </div>
+
+            <div class="section-title">INSUMOS E MATERIAIS</div>
+            <p style="font-size: 9pt; color: #64748b; margin-bottom: 8px;">Os itens abaixo são de fornecimento exclusivo do contratante. Recomendamos adquirir conforme a especificação e quantidade listada para garantir a execução da obra.</p>
+
+            ${insumos.length > 0 ? `
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 15%; text-align: center;">Qtd</th>
+                    <th style="width: 15%; text-align: center;">Unid.</th>
+                    <th style="width: 70%;">Descrição do Material</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${insumos.map(i => `
+                    <tr>
+                      <td style="text-align: center; font-weight: bold;">${i.quantidade}</td>
+                      <td style="text-align: center;">${i.unidade || 'Un'}</td>
+                      <td>${i.servico_nome || i.descricao}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : `
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; text-align: center; font-size: 9.5pt; color: #64748b;">
+                Nenhum material listado para compra pelo cliente nesta proposta.
+              </div>
+            `}
+          </div>
+          ${footerHtml}
+        </div>
       </body>
     </html>
   `);
@@ -418,7 +600,7 @@ export function PropostaComercialPreviewModal({
   modoVisualizacao = 'resumido',
   onModoVisualizacaoChange
 }) {
-  const [currentPage, setCurrentPage] = useState(1); // 1, 2, 3 ou 0 (todos)
+  const [currentPage, setCurrentPage] = useState(0); // 0 (Ver Todas por padrão), 1, 2, 3
 
   const {
     clienteNome = '',
@@ -440,11 +622,22 @@ export function PropostaComercialPreviewModal({
   } = data;
 
   const contatoExibicao = [clienteTelefone, clienteEmail].filter(Boolean).join(' • ') || clienteContato || '(47) 99138-7244';
-  const itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
+  const emissor = getDadosEmissor(data);
+  const responsavelAssinatura = emissor.responsavel;
+  let itensAtivos = itens.filter(i => Number(i.quantidade) > 0);
+  if (data.fornecimentoMateriais === 'cliente') {
+    itensAtivos = itensAtivos.filter(i => i.tipo !== 'insumo');
+  }
 
-  const objetivoTexto = objetivoCustom || (itensAtivos.length > 0
-    ? `Execução dos serviços de ${itensAtivos.map(i => i.servico_nome).join(', ')} contemplando:`
-    : 'Execução dos serviços especializados de construção civil e reforma contemplando:');
+  let objetivoTexto = objetivoCustom;
+  if (!objetivoTexto) {
+    if (itensAtivos.length > 0) {
+      const nomes = itensAtivos.map(i => i.servico_nome).join(', ');
+      objetivoTexto = "Execução dos serviços de " + nomes + " contemplando:";
+    } else {
+      objetivoTexto = "Execução dos serviços especializados de construção civil e reforma contemplando:";
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -466,25 +659,25 @@ export function PropostaComercialPreviewModal({
           <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
             <button
               onClick={() => setCurrentPage(1)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${currentPage === 1 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              className={"px-2.5 py-1 rounded-lg font-medium transition-all " + (currentPage === 1 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white')}
             >
               Página 1
             </button>
             <button
               onClick={() => setCurrentPage(2)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${currentPage === 2 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              className={"px-2.5 py-1 rounded-lg font-medium transition-all " + (currentPage === 2 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white')}
             >
               Página 2
             </button>
             <button
               onClick={() => setCurrentPage(3)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${currentPage === 3 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              className={"px-2.5 py-1 rounded-lg font-medium transition-all " + (currentPage === 3 ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white')}
             >
               Página 3
             </button>
             <button
               onClick={() => setCurrentPage(0)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${currentPage === 0 ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              className={"px-2.5 py-1 rounded-lg font-medium transition-all " + (currentPage === 0 ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-400 hover:text-white')}
             >
               Ver Todas
             </button>
@@ -495,13 +688,13 @@ export function PropostaComercialPreviewModal({
           <div className="flex bg-slate-900 border border-slate-700 rounded-xl p-1 mr-2 text-xs">
             <button
               onClick={() => onModoVisualizacaoChange && onModoVisualizacaoChange('resumido')}
-              className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'resumido' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+              className={"px-3 py-1 rounded-lg transition-colors " + (modoVisualizacao === 'resumido' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200')}
             >
               Resumido
             </button>
             <button
               onClick={() => onModoVisualizacaoChange && onModoVisualizacaoChange('detalhado')}
-              className={`px-3 py-1 rounded-lg transition-colors ${modoVisualizacao === 'detalhado' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+              className={"px-3 py-1 rounded-lg transition-colors " + (modoVisualizacao === 'detalhado' ? 'bg-slate-700 text-white font-semibold' : 'text-slate-400 hover:text-slate-200')}
             >
               Detalhado
             </button>
@@ -515,6 +708,17 @@ export function PropostaComercialPreviewModal({
             <Printer className="w-3.5 h-3.5" />
             <span>Imprimir / Salvar PDF</span>
           </button>
+
+          {data.fornecimentoMateriais === 'cliente' && (
+            <button
+              type="button"
+              onClick={() => printListaMateriais(data)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Imprimir Lista de Materiais</span>
+            </button>
+          )}
 
           {!readOnlyView && onSave && (
             <button
@@ -547,8 +751,8 @@ export function PropostaComercialPreviewModal({
               <div className="mb-4 text-xs">
                 <p className="font-extrabold text-sm text-slate-900">EDIFICA SOLUÇÕES EM OBRAS</p>
                 <p className="text-slate-700">CNPJ: 62.829.765/0001-96</p>
-                <p className="text-slate-700">Telefone: (47) 99138-7244</p>
-                <p className="text-slate-700">E-mail: marcio@solucoesedifica.com.br</p>
+                <p className="text-slate-700">Telefone: {emissor.telefone}</p>
+                <p className="text-slate-700">E-mail: {emissor.email}</p>
               </div>
 
               <div className="mb-5 text-xs">
@@ -564,11 +768,11 @@ export function PropostaComercialPreviewModal({
 
               <div className="font-extrabold text-xs uppercase text-slate-900 mb-2">2. SERVIÇOS A EXECUTAR</div>
               <div className="space-y-1 text-xs text-slate-700 mb-4 pl-1">
-                {itensAtivos.length > 0 ? (
-                  itensAtivos.map((it, idx) => (
+                {itensAtivos.filter(it => it.tipo === 'servico').length > 0 ? (
+                  itensAtivos.filter(it => it.tipo === 'servico').map((it, idx) => (
                     <div key={idx} className="flex items-start gap-2">
                       <span className="font-black text-slate-900">✓</span>
-                      <span>{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''};</span>
+                      <span>{it.servico_nome} {it.quantidade > 1 ? "(" + it.quantidade + " un)" : ''};</span>
                     </div>
                   ))
                 ) : (
@@ -600,7 +804,7 @@ export function PropostaComercialPreviewModal({
             <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-500 font-semibold tracking-wide">
               <div>RUA BENJAMIN CONSTANT, 641</div>
               <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
-              <div>(47) 99138-7244</div>
+              <div>{emissor.telefone}</div>
             </div>
           </div>
         )}
@@ -616,7 +820,7 @@ export function PropostaComercialPreviewModal({
               <div className="font-extrabold text-xs uppercase text-slate-900 mt-2 mb-2">5. VALORES</div>
               <div className="flex items-start gap-2 text-xs text-slate-700 mb-3 pl-1">
                 <span className="font-black text-slate-900">✓</span>
-                <span>Os valores abaixo contemplam mão de obra especializada e insumos para execução dos trabalhos citados acima.</span>
+                <span>{data.fornecimentoMateriais === 'cliente' ? 'Os valores abaixo contemplam mão de obra especializada.' : 'Os valores abaixo contemplam mão de obra especializada e insumos para execução dos trabalhos citados acima.'}</span>
               </div>
 
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-5 space-y-1.5 text-xs">
@@ -630,17 +834,16 @@ export function PropostaComercialPreviewModal({
                   const bdi = margemBdiPercentual || 0;
                   const imp = impostosPercentual || 0;
                   const fatorAcrescimo = 1 + ((bdi + imp) / 100);
-                  const isCliente = it.fornecido_por === 'Cliente';
-                  const sub = isCliente ? 0 : it.preco_unitario * it.quantidade * fatorAcrescimo;
-                  const unitFinal = isCliente ? 0 : it.preco_unitario * fatorAcrescimo;
+                  const sub = it.preco_unitario * it.quantidade * fatorAcrescimo;
+                  const unitFinal = it.preco_unitario * fatorAcrescimo;
                   
                   return (
                     <div key={idx} className="py-1 border-b border-slate-200/60 last:border-0">
                       <div className="flex justify-between">
-                        <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? `(${it.quantidade} un)` : ''} {isCliente && <span className="text-[10px] text-amber-600 font-bold ml-1">(Fornecido pelo Cliente)</span>}</span>
-                        <span className="font-bold text-slate-900">{isCliente ? '-' : formatCurrency(sub)}</span>
+                        <span className="text-slate-800">{it.servico_nome} {it.quantidade > 1 ? '(' + it.quantidade + ' un)' : ''}</span>
+                        <span className="font-bold text-slate-900">{formatCurrency(sub)}</span>
                       </div>
-                      {modoVisualizacao === 'detalhado' && !isCliente && (
+                      {modoVisualizacao === 'detalhado' && (
                         <div className="pl-3 mt-1 mb-1 text-[10px] text-slate-500 font-medium">
                           <div><span className="font-semibold text-slate-700">Valor Unitário:</span> {formatCurrency(unitFinal)}</div>
                           {it.mao_de_obra > 0 && (
@@ -667,6 +870,9 @@ export function PropostaComercialPreviewModal({
                 <div className="flex items-start gap-2"><span className="font-black text-slate-900">✓</span><span>O valor informado já inclui mão de obra, encargos, alimentação da equipe, deslocamento e impostos, não havendo custos adicionais ao cliente além do escopo contratado acima.</span></div>
                 <div className="flex items-start gap-2"><span className="font-black text-slate-900">✓</span><span>Caso haja alteração da área a proposta será refeita.</span></div>
                 <div className="flex items-start gap-2"><span className="font-black text-slate-900">✓</span><span>Serviços realizados conforme normas de segurança.</span></div>
+                {data.fornecimentoMateriais === 'cliente' && (
+                  <div className="flex items-start gap-2"><span className="font-black text-slate-900">✓</span><span>Materiais e insumos não estão contemplados nesse orçamento, pois são de responsabilidade do contratante.</span></div>
+                )}
                 {observacoesCustom && (
                   <div className="flex items-start gap-2"><span className="font-black text-slate-900">✓</span><span>{observacoesCustom}</span></div>
                 )}
@@ -704,7 +910,7 @@ export function PropostaComercialPreviewModal({
             <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-500 font-semibold tracking-wide">
               <div>RUA BENJAMIN CONSTANT, 641</div>
               <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
-              <div>(47) 99138-7244</div>
+              <div>{emissor.telefone}</div>
             </div>
           </div>
         )}
@@ -730,19 +936,24 @@ export function PropostaComercialPreviewModal({
 
               {/* Assinatura da Contratada */}
               <div className="mb-14">
-                <div className="w-72 border-b border-slate-800 mb-2"></div>
+                <div className="w-80 border-b border-slate-800 mb-2"></div>
                 <p className="font-extrabold text-xs text-slate-900 uppercase">EDIFICA SOLUÇÕES EM OBRAS LTDA</p>
-                <p className="text-xs text-slate-600">Márcio Gil Paycorich</p>
+                <p className="text-xs text-slate-600">{responsavelAssinatura}</p>
               </div>
 
               {/* Assinatura do Cliente */}
               <div>
-                <p className="text-xs text-slate-800 mb-2">
-                  De acordo: ____________________________________________________________________
-                </p>
-                <p className="font-extrabold text-xs text-slate-900 uppercase ml-20">
-                  {(clienteNome || 'NOME DO CLIENTE').toUpperCase()}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-xs text-slate-800 font-medium whitespace-nowrap mt-0.5">
+                    De acordo:
+                  </span>
+                  <div className="w-80 flex flex-col items-center">
+                    <div className="w-full border-b border-slate-800 mt-3.5 mb-1.5"></div>
+                    <p className="font-extrabold text-xs text-slate-900 uppercase text-center w-full">
+                      {(clienteNome || 'NOME DO CLIENTE').toUpperCase()}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -750,7 +961,7 @@ export function PropostaComercialPreviewModal({
             <div className="border-t border-slate-200 pt-3 text-center text-[10px] text-slate-500 font-semibold tracking-wide">
               <div>RUA BENJAMIN CONSTANT, 641</div>
               <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
-              <div>(47) 99138-7244</div>
+              <div>{emissor.telefone}</div>
             </div>
           </div>
         )}
