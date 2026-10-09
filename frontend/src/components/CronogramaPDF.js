@@ -222,6 +222,33 @@ export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra') {
 
   const printWindow = window.open('', '_blank');
   
+  const logoHtml = COMPANY_LOGO_URL
+    ? `<img src="${COMPANY_LOGO_URL}" alt="Edifica" style="height: 48px; display: block; margin: 0 auto 12px auto;" />`
+    : `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+        <svg style="width: 32px; height: 32px; color: #0e2744;" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M22 82V34L50 14L78 34V82H64V42L50 28L36 42V82H22Z" />
+          <rect x="44" y="46" width="12" height="36" rx="1" fill="currentColor" />
+        </svg>
+        <div style="text-align: left;">
+          <div style="font-size: 22px; font-weight: 900; color: #0e2744; line-height: 1; letter-spacing: -0.5px; font-family: 'Inter', Arial, sans-serif;">
+            Edifica
+          </div>
+          <div style="font-size: 7.5px; font-weight: 700; color: #475569; letter-spacing: 0.28em; text-transform: uppercase; margin-top: 3px; font-family: 'Inter', Arial, sans-serif;">
+            SOLUÇÕES EM OBRAS
+          </div>
+        </div>
+      </div>
+    `;
+
+  const footerHtml = `
+    <div style="text-align: center; font-size: 8pt; font-weight: 600; color: #475569; line-height: 1.4; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 24px;">
+      <div>RUA BENJAMIN CONSTANT, 641</div>
+      <div>ESCOLA AGRICOLA – BLUMENAU/SC</div>
+      <div>(47) 99138-7244</div>
+    </div>
+  `;
+
   let rowsHtml = '';
   etapas.forEach(et => {
     rowsHtml += `
@@ -252,17 +279,35 @@ export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra') {
         <title>Cronograma Tabela - ${obraNome}</title>
         <style>
           @page { size: A4 portrait; margin: 12mm; }
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
+          body { font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; }
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
           th { background: #0f172a; color: #ffffff; padding: 12px 8px; text-align: left; font-size: 10pt; text-transform: uppercase; }
           th.center { text-align: center; }
-          h2 { margin: 0; font-size: 18pt; color: #0f172a; }
-          .header { border-bottom: 2px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 20px; }
+          h2 { margin: 0; font-size: 13pt; font-weight: 900; letter-spacing: 0.05em; color: #0e2744; text-transform: uppercase; text-align: center; margin-bottom: 10px; }
+          .header { border-bottom: 2px solid #cbd5e1; padding-bottom: 12px; margin-bottom: 20px; text-align: center; }
+          .signatures {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 48px;
+            padding-top: 10px;
+            page-break-inside: avoid;
+          }
+          .sig-box {
+            text-align: center;
+            width: 220px;
+          }
+          .sig-line {
+            border-bottom: 1px solid #334155;
+            margin-bottom: 5px;
+          }
         </style>
       </head>
       <body>
+        ${logoHtml}
+        <h1 style="text-align: center; font-size: 13pt; font-weight: 900; letter-spacing: 0.05em; color: #0e2744; text-transform: uppercase; margin-bottom: 10px;">
+          CRONOGRAMA DE EXECUÇÃO
+        </h1>
         <div class="header">
-          <h2>Cronograma de Execução</h2>
           <p style="margin: 4px 0 0 0; color: #64748b; font-size: 11pt;">Obra: <strong>${obraNome}</strong></p>
         </div>
         <table>
@@ -277,6 +322,21 @@ export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra') {
             ${rowsHtml}
           </tbody>
         </table>
+
+        <div class="signatures">
+          <div class="sig-box">
+            <div class="sig-line"></div>
+            <div style="font-weight: 800; font-size: 8.5pt; color: #0f172a;">EDIFICA SOLUÇÕES EM OBRAS</div>
+            <div style="font-size: 7.5pt; color: #475569;">Responsável Técnico / Canteiro</div>
+          </div>
+          <div class="sig-box">
+            <div class="sig-line"></div>
+            <div style="font-weight: 800; font-size: 8.5pt; color: #0f172a;">CONTRATANTE / FISCAL</div>
+            <div style="font-size: 7.5pt; color: #475569;">Fiscalização / Visto do Cliente</div>
+          </div>
+        </div>
+
+        ${footerHtml}
       </body>
     </html>
   `;
