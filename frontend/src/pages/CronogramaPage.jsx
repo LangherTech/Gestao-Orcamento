@@ -140,7 +140,7 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
           </button>
           <div className="flex gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
             <button 
-              onClick={() => exportCronogramaPDF(etapas, currentObraNome)}
+              onClick={() => exportCronogramaPDF(etapas, currentObraNome, currentClienteNome, currentObra)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
               title="Gráfico de Gantt"
             >

@@ -1,155 +1,272 @@
 import { COMPANY_LOGO_URL } from './PropostaComercialView';
 
-export function exportCronogramaPDF(etapas, obraNome = 'Obra') {
+export function exportCronogramaPDF(etapas, obraNome = 'Obra', clienteNome = '', obraData = null) {
   if (!etapas || etapas.length === 0) {
     alert("Não há etapas para gerar o cronograma.");
     return;
   }
 
-  // 1. Encontrar as datas globais do projeto (mínima e máxima)
-  let minDate = new Date('2999-12-31T00:00:00');
-  let maxDate = new Date('2000-01-01T00:00:00');
+  // 1. Organizar etapas principais e sub-etapas hierarquicamente
+  const parentEtapas = etapas.filter(e => !e.etapa_pai_id);
+  const effectiveParents = parentEtapas.length > 0 ? parentEtapas : etapas;
 
-  etapas.forEach(etapa => {
-    const dates = [
-      etapa.data_prevista_inicio,
-      etapa.data_prevista_fim,
-      etapa.data_real_inicio,
-      etapa.data_real_fim
-    ].filter(Boolean).map(d => new Date(d + 'T12:00:00'));
+  const rows = [];
+  let parentIndex = 1;
 
-    dates.forEach(d => {
-      if (d < minDate) minDate = d;
-      if (d > maxDate) maxDate = d;
+  effectiveParents.forEach(parent => {
+    const subEtapas = (parent.sub_etapas && parent.sub_etapas.length > 0)
+      ? parent.sub_etapas
+      : etapas.filter(sub => sub.etapa_pai_id === parent.id);
+
+    let pStart = parent.data_prevista_inicio || parent.data_real_inicio;
+    let pEnd = parent.data_prevista_fim || parent.data_real_fim;
+
+    if ((!pStart || !pEnd) && subEtapas.length > 0) {
+      const subStarts = subEtapas.map(s => s.data_prevista_inicio || s.data_real_inicio).filter(Boolean);
+      const subEnds = subEtapas.map(s => s.data_prevista_fim || s.data_real_fim).filter(Boolean);
+      if (!pStart && subStarts.length > 0) pStart = subStarts.slice().sort()[0];
+      if (!pEnd && subEnds.length > 0) pEnd = subEnds.slice().sort().reverse()[0];
+    }
+
+    rows.push({
+      id: parent.id,
+      nome: `${parentIndex}. ${parent.nome}`,
+      isParent: true,
+      data_inicio: pStart,
+      data_fim: pEnd
+    });
+    parentIndex++;
+
+    subEtapas.forEach(sub => {
+      rows.push({
+        id: sub.id,
+        nome: sub.nome,
+        isParent: false,
+        data_inicio: sub.data_prevista_inicio || sub.data_real_inicio,
+        data_fim: sub.data_prevista_fim || sub.data_real_fim
+      });
     });
   });
 
-  if (minDate > maxDate) {
-    alert("Datas inválidas nas etapas. Cadastre as datas antes de exportar.");
+  // 2. Determinar limites de datas
+  let minDateStr = null;
+  let maxDateStr = null;
+
+  rows.forEach(r => {
+    if (r.data_inicio) {
+      if (!minDateStr || r.data_inicio < minDateStr) minDateStr = r.data_inicio;
+    }
+    if (r.data_fim) {
+      if (!maxDateStr || r.data_fim > maxDateStr) maxDateStr = r.data_fim;
+    }
+  });
+
+  if (!minDateStr || !maxDateStr) {
+    alert("Datas inválidas nas etapas. Cadastre as datas de início e fim antes de exportar.");
     return;
   }
 
-  // Subtrair alguns dias de folga no inicio e no fim para respiro no gráfico
-  minDate.setDate(minDate.getDate() - 2);
-  maxDate.setDate(maxDate.getDate() + 2);
+  const parseYMD = (s) => {
+    if (!s) return null;
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0);
+  };
 
-  // Criar array de todos os dias
+  const startDate = parseYMD(minDateStr);
+  const endDate = parseYMD(maxDateStr);
+
   const allDays = [];
-  let curr = new Date(minDate);
-  while (curr <= maxDate) {
+  let curr = new Date(startDate);
+  while (curr <= endDate) {
     allDays.push(new Date(curr));
     curr.setDate(curr.getDate() + 1);
   }
 
-  // Separar em páginas de 45 dias para não espremer muito as colunas
-  const chunkDays = (daysArray, chunkSize = 45) => {
-    const chunks = [];
-    for (let i = 0; i < daysArray.length; i += chunkSize) {
-      chunks.push(daysArray.slice(i, i + chunkSize));
+  // 3. Regra de divisão em páginas (Notion: até 45 dias 1 página; acima de 45 dias, a cada 30 dias)
+  let dayChunks = [];
+  if (allDays.length <= 45) {
+    dayChunks = [allDays];
+  } else {
+    for (let i = 0; i < allDays.length; i += 30) {
+      dayChunks.push(allDays.slice(i, i + 30));
     }
-    return chunks;
+  }
+
+  // 4. Datas formatadas para o cabeçalho
+  const formatDateBR = (dateStrOrObj) => {
+    if (!dateStrOrObj) return '-';
+    if (typeof dateStrOrObj === 'string' && dateStrOrObj.includes('-')) {
+      const [y, m, d] = dateStrOrObj.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    const d = new Date(dateStrOrObj);
+    return d.toLocaleDateString('pt-BR');
   };
 
-  const dayChunks = chunkDays(allDays, 45);
+  const headerInicio = (obraData && obraData.data_inicio) 
+    ? formatDateBR(obraData.data_inicio) 
+    : formatDateBR(minDateStr);
+  const headerFim = (obraData && (obraData.data_prevista_fim || obraData.data_fim)) 
+    ? formatDateBR(obraData.data_prevista_fim || obraData.data_fim) 
+    : formatDateBR(maxDateStr);
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
 
-  const logoHtml = COMPANY_LOGO_URL
-    ? `<img src="${COMPANY_LOGO_URL}" alt="Edifica" style="height: 38px; display: block;" />`
-    : `<div style="font-size: 22px; font-weight: 900; color: #0e2744; font-family: 'Inter', sans-serif;">Edifica</div>`;
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-  let htmlContent = '';
+  let htmlPages = '';
 
   dayChunks.forEach((days, chunkIndex) => {
+    // Agrupar meses para o cabeçalho das colunas
     const monthHeaders = [];
-    let currentMonth = -1;
+    let currentMonthKey = null;
+    let currentMonthNum = 0;
+    let currentYearNum = 0;
     let currentMonthCount = 0;
-    
+
     days.forEach(d => {
-      if (d.getMonth() !== currentMonth) {
-        if (currentMonth !== -1) {
-          monthHeaders.push({ month: currentMonth, year: d.getFullYear(), span: currentMonthCount });
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (key !== currentMonthKey) {
+        if (currentMonthKey !== null) {
+          monthHeaders.push({ month: currentMonthNum, year: currentYearNum, span: currentMonthCount });
         }
-        currentMonth = d.getMonth();
+        currentMonthKey = key;
+        currentMonthNum = d.getMonth();
+        currentYearNum = d.getFullYear();
         currentMonthCount = 1;
       } else {
         currentMonthCount++;
       }
     });
     if (currentMonthCount > 0) {
-      monthHeaders.push({ month: currentMonth, year: days[days.length - 1].getFullYear(), span: currentMonthCount });
+      monthHeaders.push({ month: currentMonthNum, year: currentYearNum, span: currentMonthCount });
     }
 
-    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
-    htmlContent += `
-      <div class="a4-page ${chunkIndex > 0 ? 'page-break' : ''}">
-        <div class="header">
-          ${logoHtml}
-          <div style="text-align: right;">
-            <div class="title">CRONOGRAMA FÍSICO DE EXECUÇÃO</div>
-            <div class="subtitle">Projeto: ${obraNome} | Página ${chunkIndex + 1} de ${dayChunks.length}</div>
-          </div>
+    // Cabeçalho da primeira folha
+    const isFirstPage = chunkIndex === 0;
+    const headerHtml = isFirstPage ? `
+      <div class="header">
+        <div class="header-left">
+          <div class="company-name">Edifica Soluções em Obras</div>
+          <div class="report-title">Cronograma da obra</div>
         </div>
+        <div class="header-right">
+          <table class="info-table">
+            <tr>
+              <td class="info-label">Cliente</td>
+              <td class="info-value">${clienteNome || '-'}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Obra</td>
+              <td class="info-value">${obraNome || '-'}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Início</td>
+              <td class="info-value">${headerInicio}</td>
+            </tr>
+            <tr>
+              <td class="info-label">Previsão de entrega</td>
+              <td class="info-value">${headerFim}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <div class="header-line"></div>
+    ` : '';
 
+    // Renderizar linhas do cronograma
+    const rowsHtml = rows.map(row => {
+      const rowStart = row.data_inicio ? parseYMD(row.data_inicio).getTime() : null;
+      const rowEnd = row.data_fim ? parseYMD(row.data_fim).getTime() : null;
+
+      const cellsHtml = days.map((d, dIdx) => {
+        const dTime = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0).getTime();
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+        const inRange = rowStart && rowEnd && dTime >= rowStart && dTime <= rowEnd;
+
+        let barHtml = '';
+        if (inRange) {
+          const isStart = dTime === rowStart;
+          const isEnd = dTime === rowEnd;
+
+          // Classes para bordas arredondadas e margens
+          const startClass = isStart ? 'is-start' : '';
+          const endClass = isEnd ? 'is-end' : '';
+
+          barHtml = `
+            <div class="bar-wrapper">
+              <div class="bar ${row.isParent ? 'parent' : 'sub'} ${startClass} ${endClass}"></div>
+            </div>
+          `;
+        }
+
+        return `
+          <td class="timeline-cell ${isWeekend ? 'weekend' : ''}">
+            ${barHtml}
+          </td>
+        `;
+      }).join('');
+
+      return `
+        <tr class="gantt-row">
+          <td class="task-name-cell ${row.isParent ? 'parent-task' : 'sub-task'}">
+            ${row.nome}
+          </td>
+          ${cellsHtml}
+        </tr>
+      `;
+    }).join('');
+
+    htmlPages += `
+      <div class="a4-page ${chunkIndex > 0 ? 'page-break' : ''}">
+        ${headerHtml}
+        
         <table class="gantt-table">
           <thead>
             <tr>
-              <th rowspan="2" class="task-col-header">Etapas do Projeto</th>
-              ${monthHeaders.map(m => `<th colspan="${m.span}" class="month-header">${monthNames[m.month]} ${m.year}</th>`).join('')}
+              <th rowspan="2" class="task-header">Etapas</th>
+              ${monthHeaders.map(m => `
+                <th colspan="${m.span}" class="month-header">
+                  ${monthNames[m.month]} ${m.year}
+                </th>
+              `).join('')}
             </tr>
             <tr>
               ${days.map(d => {
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                return `<th class="day-header ${isWeekend ? 'weekend' : ''}">${d.getDate().toString().padStart(2, '0')}</th>`;
+                return `
+                  <th class="day-header ${isWeekend ? 'weekend' : ''}">
+                    ${d.getDate()}
+                  </th>
+                `;
               }).join('')}
             </tr>
           </thead>
           <tbody>
-            ${etapas.map(etapa => {
-              const pStart = etapa.data_prevista_inicio ? new Date(etapa.data_prevista_inicio + 'T12:00:00').getTime() : null;
-              const pEnd = etapa.data_prevista_fim ? new Date(etapa.data_prevista_fim + 'T12:00:00').getTime() : null;
-
-              const rStart = etapa.data_real_inicio ? new Date(etapa.data_real_inicio + 'T12:00:00').getTime() : null;
-              const rEnd = etapa.data_real_fim ? new Date(etapa.data_real_fim + 'T12:00:00').getTime() : (rStart ? new Date().getTime() : null);
-
-              let rowHtml = `
-                <tr class="task-row">
-                  <td class="task-name-cell">
-                    <div style="font-weight: bold; font-size: 8pt; color: #0f172a;">${etapa.nome}</div>
-                  </td>
-                  ${days.map(d => {
-                    const t = d.getTime();
-                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                    
-                    let cellClass = isWeekend ? 'weekend-cell' : '';
-                    let innerHtml = '';
-
-                    const isPrevisto = pStart && pEnd && t >= pStart && t <= pEnd;
-                    const isRealizado = rStart && rEnd && t >= rStart && t <= rEnd;
-
-                    if (isPrevisto && isRealizado) {
-                      innerHtml = `<div class="bar-mixed"></div>`;
-                    } else if (isPrevisto) {
-                      innerHtml = `<div class="bar-previsto"></div>`;
-                    } else if (isRealizado) {
-                      innerHtml = `<div class="bar-realizado"></div>`;
-                    }
-
-                    return `<td class="${cellClass}"><div class="cell-content">${innerHtml}</div></td>`;
-                  }).join('')}
-                </tr>
-              `;
-              return rowHtml;
-            }).join('')}
+            ${rowsHtml}
           </tbody>
         </table>
 
-        <div class="legend">
-          <div class="legend-item"><div class="legend-color" style="background: #cbd5e1;"></div> Período Previsto</div>
-          <div class="legend-item"><div class="legend-color" style="background: #10b981;"></div> Execução Real</div>
-          <div class="legend-item"><div class="legend-color" style="background: #f1f5f9; border: 1px dashed #cbd5e1;"></div> Finais de Semana</div>
+        <div class="footer-bar">
+          <div class="legend">
+            <div class="legend-item">
+              <div class="legend-color" style="background: #155e9f;"></div>
+              <span>Etapa</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #79aee4;"></div>
+              <span>Sub-etapa</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color" style="background: #edebe6; border: 1px solid #cbd5e1;"></div>
+              <span>Fim de semana</span>
+            </div>
+          </div>
+          <div class="page-info">
+            Página ${chunkIndex + 1} de ${dayChunks.length}
+          </div>
         </div>
       </div>
     `;
@@ -160,43 +277,208 @@ export function exportCronogramaPDF(etapas, obraNome = 'Obra') {
     <html lang="pt-BR">
       <head>
         <meta charset="utf-8">
-        <title>Cronograma - ${obraNome}</title>
+        <title>Cronograma Visual - ${obraNome}</title>
         <style>
-          @page { size: A4 landscape; margin: 10mm; }
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: 'Inter', Arial, sans-serif; background: #fff; color: #1e293b; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .a4-page { width: 277mm; min-height: 190mm; padding: 10mm; position: relative; margin: 0 auto; background: white; }
-          .page-break { page-break-before: always; }
-          
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0e2744; padding-bottom: 8px; margin-bottom: 16px; }
-          .title { font-weight: 900; font-size: 14pt; color: #0e2744; text-transform: uppercase; letter-spacing: 1px; }
-          .subtitle { font-size: 9pt; color: #64748b; margin-top: 4px; font-weight: 600; }
-          
-          .gantt-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7pt; }
-          .task-col-header { width: 25%; text-align: left; padding: 6px 8px; border: 1px solid #94a3b8; background: #f8fafc; font-size: 8pt; color: #0f172a; }
-          .month-header { text-align: center; border: 1px solid #94a3b8; background: #e2e8f0; padding: 3px; font-weight: 800; font-size: 7.5pt; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
-          .day-header { text-align: center; border: 1px solid #94a3b8; padding: 3px 0; color: #475569; font-weight: 600; }
-          .day-header.weekend { background: #f1f5f9; color: #94a3b8; }
-          
-          .task-row td { border: 1px solid #cbd5e1; height: 28px; }
-          .task-name-cell { padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #f8fafc; border-right: 2px solid #94a3b8; }
-          
-          .weekend-cell { background: #f8fafc; }
-          .cell-content { width: 100%; height: 100%; padding: 2px 0; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-          
-          .bar-previsto { background: #cbd5e1; height: 8px; width: 100%; border-radius: 2px; }
-          .bar-realizado { background: #10b981; height: 8px; width: 100%; border-radius: 2px; }
-          .bar-mixed { height: 18px; width: 100%; position: relative; }
-          .bar-mixed::before { content: ''; position: absolute; top: 1px; left: 0; right: 0; height: 6px; background: #cbd5e1; border-radius: 2px; }
-          .bar-mixed::after { content: ''; position: absolute; bottom: 1px; left: 0; right: 0; height: 6px; background: #10b981; border-radius: 2px; }
-          
-          .legend { display: flex; gap: 20px; margin-top: 24px; font-size: 8.5pt; font-weight: 600; color: #475569; justify-content: center; }
-          .legend-item { display: flex; align-items: center; gap: 6px; }
-          .legend-color { width: 18px; height: 10px; border-radius: 2px; }
+          @page {
+            size: A4 landscape;
+            margin: 10mm 14mm 10mm 14mm;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #ffffff;
+            color: #0f172a;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .a4-page {
+            width: 100%;
+            position: relative;
+            background: #ffffff;
+            margin: 0 auto;
+          }
+          .page-break {
+            page-break-before: always;
+            break-before: page;
+            padding-top: 5mm;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+          }
+          .company-name {
+            font-size: 16.5pt;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.3px;
+          }
+          .report-title {
+            font-size: 9.5pt;
+            color: #64748b;
+            margin-top: 3px;
+            font-weight: 500;
+          }
+          .info-table {
+            border-collapse: collapse;
+            font-size: 8.5pt;
+          }
+          .info-table td {
+            padding: 1.5px 0;
+          }
+          .info-label {
+            color: #475569;
+            font-weight: 500;
+            padding-right: 28px !important;
+            text-align: left;
+          }
+          .info-value {
+            color: #0f172a;
+            font-weight: 700;
+            text-align: left;
+          }
+          .header-line {
+            height: 1px;
+            background-color: #cbd5e1;
+            margin-bottom: 14px;
+          }
+          .gantt-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .task-header {
+            width: 25%;
+            text-align: left;
+            padding: 6px 8px;
+            font-size: 8.5pt;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 1px solid #cbd5e1;
+          }
+          .month-header {
+            background-color: #f8fafc;
+            border: 1px solid #cbd5e1;
+            text-align: center;
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: #0f172a;
+            padding: 5px 2px;
+          }
+          .day-header {
+            border: 1px solid #cbd5e1;
+            text-align: center;
+            font-size: 7.5pt;
+            font-weight: 500;
+            color: #334155;
+            padding: 4px 0;
+            background-color: #ffffff;
+          }
+          .day-header.weekend {
+            background-color: #edebe6 !important;
+            color: #475569;
+          }
+          .task-name-cell {
+            width: 25%;
+            padding: 5px 8px;
+            font-size: 8.5pt;
+            color: #0f172a;
+            border-bottom: 1px solid #f1f5f9;
+            border-right: 1px solid #cbd5e1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .task-name-cell.parent-task {
+            font-weight: 700;
+            color: #0f172a;
+          }
+          .task-name-cell.sub-task {
+            padding-left: 22px;
+            font-weight: 400;
+            color: #475569;
+          }
+          .timeline-cell {
+            padding: 0;
+            height: 27px;
+            border-right: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+            background-color: #ffffff;
+          }
+          .timeline-cell.weekend {
+            background-color: #edebe6 !important;
+          }
+          .bar-wrapper {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+          }
+          .bar {
+            width: 100%;
+          }
+          .bar.parent {
+            height: 14px;
+            background-color: #155e9f;
+          }
+          .bar.sub {
+            height: 12px;
+            background-color: #79aee4;
+          }
+          .bar.is-start {
+            border-top-left-radius: 4px;
+            border-bottom-left-radius: 4px;
+            margin-left: 2px;
+            width: calc(100% - 2px);
+          }
+          .bar.is-end {
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+            margin-right: 2px;
+            width: calc(100% - 2px);
+          }
+          .bar.is-start.is-end {
+            margin-left: 2px;
+            margin-right: 2px;
+            width: calc(100% - 4px);
+          }
+          .footer-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 18px;
+            font-size: 8pt;
+            color: #475569;
+          }
+          .legend {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+          }
+          .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .legend-color {
+            width: 16px;
+            height: 10px;
+            border-radius: 2px;
+          }
+          .page-info {
+            font-size: 8pt;
+            color: #64748b;
+          }
         </style>
       </head>
       <body>
-        \${htmlContent}
+        ${htmlPages}
       </body>
     </html>
   `);
