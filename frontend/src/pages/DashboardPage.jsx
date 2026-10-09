@@ -6,6 +6,10 @@ export default function DashboardPage({ selectedObra, kpis, lucratividadeObras, 
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
   };
 
+  const filteredLucratividadeObras = selectedObra 
+    ? (lucratividadeObras || []).filter(item => item.obra_nome === selectedObra.nome)
+    : (lucratividadeObras || []);
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -106,7 +110,7 @@ export default function DashboardPage({ selectedObra, kpis, lucratividadeObras, 
           <p className="text-xs text-slate-400 mb-6">Comparação de margem de lucro percentual entre obras ativas</p>
 
           <div className="space-y-4">
-            {lucratividadeObras.map((item, index) => (
+            {filteredLucratividadeObras.map((item, index) => (
               <div key={index} className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-slate-200 flex items-center gap-1.5">
@@ -127,7 +131,7 @@ export default function DashboardPage({ selectedObra, kpis, lucratividadeObras, 
                 </div>
               </div>
             ))}
-            {lucratividadeObras.length === 0 && (
+            {filteredLucratividadeObras.length === 0 && (
               <div className="text-center py-8 text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800/60 border-dashed">
                 Nenhuma obra ativa cadastrada no momento.
               </div>
