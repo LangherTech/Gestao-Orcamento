@@ -85,7 +85,7 @@ def seed():
             if nome not in existing_names:
                 conn.run(
                     "INSERT INTO servicos (nome, categoria, unidade, preco_total, mao_de_obra, margem_lucro) VALUES (:nome, :categoria, :unidade, :preco, :mao, :lucro)",
-                    nome=nome, categoria="Alvenaria Completa", unidade=unidade, preco=0.0, mao=0.0, lucro=0.0
+                    nome=nome, categoria="Alvenaria", unidade=unidade, preco=0.0, mao=0.0, lucro=0.0
                 )
                 count += 1
                 existing_names.append(nome)

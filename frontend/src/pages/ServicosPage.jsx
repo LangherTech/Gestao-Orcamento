@@ -15,7 +15,7 @@ import AssistenteDrywallModal from '../components/AssistenteDrywallModal';
 // Constantes e Helpers
 // ========================================
 const CATEGORIAS_PADRAO = [
-  'Alvenaria e Fechamentos',
+  'Alvenaria',
   'Elétrica',
   'Gesso e Drywall',
   'Hidráulica',
@@ -26,7 +26,6 @@ const CATEGORIAS_PADRAO = [
   'Esquadrias',
   'Cobertura',
   'Drywall',
-  'Alvenaria',
 ];
 
 const UNIDADES_SERVICO = [

@@ -39,7 +39,7 @@ async def list_categorias(user: dict = Depends(get_current_user)):
             logger.warning(f"Erro ao buscar categorias no Supabase: {e}")
 
     return [
-        "Alvenaria e Fechamentos",
+        "Alvenaria",
         "Elétrica",
         "Gesso e Drywall",
         "Hidráulica",
@@ -631,7 +631,7 @@ async def list_servicos(
             "obra_id": None,
             "nome": "Parede Drywall Standard (120mm)",
             "descricao": "Parede em drywall com estrutura metálica 70mm e placa ST 12.5mm em ambos os lados. Inclui tratamento de juntas.",
-            "categoria": "Alvenaria e Fechamentos",
+            "categoria": "Alvenaria",
             "preco_total": 145.00,
             "margem_lucro": 25.00,
             "mao_de_obra": 45.00,
