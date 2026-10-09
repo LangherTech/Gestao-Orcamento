@@ -455,8 +455,12 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
           {filteredObras.map((obra) => {
             const isAtiva = obra.status === 'ativa';
             const isArquivada = Boolean(obra.arquivada);
-            const valorAprovadoCalc = obra.orcamentos?.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
-            const valorPendenteCalc = obra.orcamentos?.filter(o => o.status === 'rascunho' || o.status === 'enviado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0) || 0;
+            const valorAprovadoCalc = (obra.orcamentos && obra.orcamentos.length > 0)
+              ? obra.orcamentos.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0)
+              : Number(obra.valor_aprovado || 0);
+            const valorPendenteCalc = (obra.orcamentos && obra.orcamentos.length > 0)
+              ? obra.orcamentos.filter(o => o.status === 'rascunho' || o.status === 'enviado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0)
+              : Number(obra.valor_pendente_aprovacao || 0);
 
             return (
               <div 
@@ -685,6 +689,14 @@ export default function ObrasPage({ obras = [], onSelectObra, onRefresh }) {
                           : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                       }`}>
                         {obra.status === 'ativa' ? 'Ativa' : 'Concluída'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-300 mb-3 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block text-[10px]">Orçamento Aprovado:</span>
+                      <span className="font-bold text-white">
+                        {formatMoney((obra.orcamentos && obra.orcamentos.length > 0)
+                          ? obra.orcamentos.filter(o => o.status === 'aprovado').reduce((acc, o) => acc + Number(o.valor_total || 0), 0)
+                          : Number(obra.valor_aprovado || 0))}
                       </span>
                     </div>
                     <button

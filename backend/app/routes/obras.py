@@ -28,7 +28,7 @@ async def list_obras(
     if not supabase:
         return []
 
-    query = supabase.table("obras").select("*")
+    query = supabase.table("obras").select("*, orcamentos(id, status, valor_total)")
     termo = (busca or search or "").strip()
 
     # REGRA CRÍTICA DE BUSCA:
@@ -208,7 +208,7 @@ async def get_obra(id: UUID, user: dict = Depends(get_current_user)):
     """Obtém detalhes de uma obra."""
     supabase = get_supabase_client()
     if supabase:
-        res = supabase.table("obras").select("*").eq("id", str(id)).single().execute()
+        res = supabase.table("obras").select("*, orcamentos(id, status, valor_total)").eq("id", str(id)).single().execute()
         if res.data:
             return res.data
         raise HTTPException(status_code=404, detail="Obra não encontrada")
