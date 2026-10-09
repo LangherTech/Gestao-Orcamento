@@ -90,6 +90,9 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const [funcForm, setFuncForm] = useState(initialFuncForm);
 
   const initialAlocForm = {
+    tipo: 'individual', // 'individual' ou 'equipe'
+    equipe_id: '',
+    funcionarios_ids: [],
     obra_id: selectedObraId || '',
     funcionario_id: '',
     data_inicio: new Date().toISOString().split('T')[0],
@@ -392,17 +395,40 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const handleSaveAlocacao = async (e) => {
     e.preventDefault();
     try {
-      const payload = {
-        ...alocForm,
-        valor_diaria: alocForm.valor_diaria !== '' && alocForm.valor_diaria !== null ? parseFloat(alocForm.valor_diaria) : null,
-        valor_fechado: alocForm.valor_fechado !== '' && alocForm.valor_fechado !== null ? parseFloat(alocForm.valor_fechado) : null
-      };
-
-      const res = await api.post('/calendario/alocacoes', payload);
-      if (res.data?.warning) {
-        showToast(res.data.warning, 'warning');
+      if (alocForm.tipo === 'equipe') {
+        if (!alocForm.funcionarios_ids || alocForm.funcionarios_ids.length === 0) {
+          showToast('Selecione pelo menos um membro da equipe para alocar.', 'warning');
+          return;
+        }
+        const payloadLote = {
+          obra_id: alocForm.obra_id,
+          funcionarios_ids: alocForm.funcionarios_ids,
+          data_inicio: alocForm.data_inicio,
+          data_fim: alocForm.data_fim,
+          periodo: alocForm.periodo,
+          modalidade_pagamento: alocForm.modalidade_pagamento,
+          valor_fechado_total: alocForm.valor_fechado !== '' && alocForm.valor_fechado !== null ? parseFloat(alocForm.valor_fechado) : null
+        };
+        const res = await api.post('/calendario/alocacoes/lote', payloadLote);
+        showToast(res.data?.message || 'Equipe alocada com sucesso!');
       } else {
-        showToast('Alocação registrada com sucesso!');
+        const payload = {
+          obra_id: alocForm.obra_id,
+          funcionario_id: alocForm.funcionario_id,
+          data_inicio: alocForm.data_inicio,
+          data_fim: alocForm.data_fim,
+          periodo: alocForm.periodo,
+          modalidade_pagamento: alocForm.modalidade_pagamento,
+          valor_diaria: alocForm.valor_diaria !== '' && alocForm.valor_diaria !== null ? parseFloat(alocForm.valor_diaria) : null,
+          valor_fechado: alocForm.valor_fechado !== '' && alocForm.valor_fechado !== null ? parseFloat(alocForm.valor_fechado) : null
+        };
+
+        const res = await api.post('/calendario/alocacoes', payload);
+        if (res.data?.warning) {
+          showToast(res.data.warning, 'warning');
+        } else {
+          showToast('Alocação registrada com sucesso!');
+        }
       }
       setShowModal(false);
       setAlocForm(initialAlocForm);
@@ -2182,20 +2208,105 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
 
             <div className="p-6">
               <form id="aloc-form" onSubmit={handleSaveAlocacao} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Colaborador *</label>
-                  <select
-                    required
-                    value={alocForm.funcionario_id}
-                    onChange={e => setAlocForm({...alocForm, funcionario_id: e.target.value})}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                {/* Tipo de Alocação */}
+                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setAlocForm({...alocForm, tipo: 'individual', equipe_id: '', funcionarios_ids: []})}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-colors ${alocForm.tipo === 'individual' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-300'}`}
                   >
-                    <option value="">Selecione o colaborador...</option>
-                    {funcionarios.map(f => (
-                      <option key={f.id} value={f.id}>{f.nome} {f.cargo ? `(${f.cargo})` : ''}</option>
-                    ))}
-                  </select>
+                    Colaborador Individual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlocForm({...alocForm, tipo: 'equipe', funcionario_id: ''})}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-colors ${alocForm.tipo === 'equipe' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-300'}`}
+                  >
+                    Equipe Completa
+                  </button>
                 </div>
+
+                {alocForm.tipo === 'individual' ? (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Colaborador *</label>
+                    <select
+                      required
+                      value={alocForm.funcionario_id}
+                      onChange={e => setAlocForm({...alocForm, funcionario_id: e.target.value})}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="">Selecione o colaborador...</option>
+                      {funcionarios.map(f => (
+                        <option key={f.id} value={f.id}>{f.nome} {f.cargo ? `(${f.cargo})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Equipe Base *</label>
+                    <select
+                      required
+                      value={alocForm.equipe_id}
+                      onChange={e => {
+                        const eqId = e.target.value;
+                        const eq = equipes.find(eq => eq.id === eqId);
+                        const allMembers = eq ? [eq.lider_id, ...(eq.membros || [])].filter(Boolean) : [];
+                        setAlocForm({...alocForm, equipe_id: eqId, funcionarios_ids: allMembers});
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="">Selecione a equipe...</option>
+                      {equipes.map(eq => (
+                        <option key={eq.id} value={eq.id}>{eq.nome}</option>
+                      ))}
+                    </select>
+
+                    {alocForm.equipe_id && alocForm.funcionarios_ids.length > 0 && (
+                      <div className="mt-3 bg-slate-950/50 border border-slate-800 rounded-xl p-3">
+                        <p className="text-xs text-slate-400 mb-2">Desmarque os membros que <strong className="text-rose-400">não</strong> participarão desta alocação:</p>
+                        <div className="max-h-[120px] overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+                          {funcionarios
+                            .filter(f => {
+                              const eq = equipes.find(eq => eq.id === alocForm.equipe_id);
+                              return eq && (f.id === eq.lider_id || (eq.membros || []).includes(f.id));
+                            })
+                            .map(f => (
+                              <label key={f.id} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer bg-slate-900/50 p-1.5 rounded hover:bg-slate-800">
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-slate-600 bg-slate-950 text-emerald-500 focus:ring-emerald-500/30 w-3.5 h-3.5"
+                                  checked={alocForm.funcionarios_ids.includes(f.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setAlocForm(prev => ({...prev, funcionarios_ids: [...prev.funcionarios_ids, f.id]}));
+                                    } else {
+                                      setAlocForm(prev => ({...prev, funcionarios_ids: prev.funcionarios_ids.filter(id => id !== f.id)}));
+                                    }
+                                  }}
+                                />
+                                <span className={f.id === equipes.find(eq => eq.id === alocForm.equipe_id)?.lider_id ? 'font-bold text-white' : ''}>
+                                  {f.nome} {f.id === equipes.find(eq => eq.id === alocForm.equipe_id)?.lider_id ? '(Líder)' : ''}
+                                </span>
+                              </label>
+                            ))}
+                        </div>
+                        {alocForm.modalidade_pagamento === 'diaria' && (
+                          <div className="mt-3 pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
+                            <span className="text-slate-400">Soma das diárias (Equipe):</span>
+                            <span className="font-bold text-emerald-400">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                alocForm.funcionarios_ids.reduce((sum, id) => {
+                                  const func = funcionarios.find(f => f.id === id);
+                                  return sum + (func?.valor_diaria || 0);
+                                }, 0)
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Obra de Destino *</label>

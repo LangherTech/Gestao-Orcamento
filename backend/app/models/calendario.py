@@ -79,6 +79,19 @@ class AlocacaoBase(BaseModel):
             return None
         return v
 
+class AlocacaoLote(BaseModel):
+    obra_id: UUID
+    funcionarios_ids: List[UUID]
+    data_inicio: date
+    data_fim: date
+    periodo: str = Field("dia_inteiro", description="dia_inteiro, manha, tarde")
+    modalidade_pagamento: str = Field("diaria", description="diaria, fechado")
+    # For lote, we might receive individual diárias or empty if they fallback to individual ones
+    # But usually diária is per-person, so we might just use the person's own valor_diaria in the backend.
+    # The frontend will just let backend resolve it or pass an array.
+    # Let's keep it simple: the frontend sends the lote request and the backend fetches each funcs default diária if it's "diaria" modalidade.
+    valor_fechado_total: Optional[float] = None
+
 class AlocacaoUpdate(BaseModel):
     obra_id: Optional[UUID] = None
     funcionario_id: Optional[UUID] = None

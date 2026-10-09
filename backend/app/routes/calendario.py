@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status as http_sta
 from ..models.calendario import (
     FuncionarioBase, FuncionarioUpdate, FuncionarioResponse,
     ProfissaoCreate, ProfissaoUpdate, ProfissaoResponse,
-    AlocacaoBase, AlocacaoUpdate, AlocacaoResponse,
+    AlocacaoBase, AlocacaoUpdate, AlocacaoResponse, AlocacaoLote,
     EquipeBase, EquipeResponse,
     PagamentoFuncionarioBase, PagamentoFuncionarioResponse,
     FaltaCreate, FaltaResponse
@@ -473,6 +473,71 @@ async def create_alocacao(alocacao: AlocacaoBase, user: dict = Depends(get_curre
     except Exception as e:
         logger.error(f"Erro ao criar alocação: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro ao criar alocação: {str(e)}")
+
+@router.post("/alocacoes/lote", response_model=dict, status_code=http_status.HTTP_201_CREATED)
+async def create_alocacao_lote(alocacao_lote: AlocacaoLote, user: dict = Depends(get_current_user)):
+    """Cria alocações em lote para uma equipe completa."""
+    supabase = get_supabase_client()
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database connection unavailable")
+
+    data = alocacao_lote.model_dump(mode="json")
+    created_by = user.get("id") if not user.get("is_mock") else None
+    
+    funcionarios_ids = data.pop("funcionarios_ids", [])
+    if not funcionarios_ids:
+        raise HTTPException(status_code=400, detail="Nenhum funcionário selecionado para alocação.")
+        
+    obra_id = str(data["obra_id"])
+    data_inicio = str(data["data_inicio"])
+    data_fim = str(data["data_fim"])
+    periodo = data["periodo"]
+    modalidade = data["modalidade_pagamento"]
+    valor_fechado_total = data.pop("valor_fechado_total", None)
+    
+    # Se for valor fechado, dividimos o total entre os membros.
+    valor_fechado_individual = None
+    if modalidade == "fechado" and valor_fechado_total is not None:
+        valor_fechado_individual = valor_fechado_total / len(funcionarios_ids)
+        
+    # Buscar valor da diária se for modalidade diaria
+    funcs_map = {}
+    if modalidade == "diaria":
+        try:
+            funcs_res = supabase.table("funcionarios").select("id, valor_diaria").in_("id", [str(fid) for fid in funcionarios_ids]).execute()
+            if funcs_res.data:
+                funcs_map = {f["id"]: f.get("valor_diaria") for f in funcs_res.data}
+        except Exception as e:
+            logger.warning(f"Erro ao buscar diárias dos funcionários: {e}")
+
+    alocacoes_to_insert = []
+    
+    for fid in funcionarios_ids:
+        fid_str = str(fid)
+        aloc_data = {
+            "obra_id": obra_id,
+            "funcionario_id": fid_str,
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "periodo": periodo,
+            "modalidade_pagamento": modalidade,
+            "created_by": created_by
+        }
+        if modalidade == "diaria":
+            aloc_data["valor_diaria"] = funcs_map.get(fid_str)
+        else:
+            aloc_data["valor_fechado"] = valor_fechado_individual
+            
+        alocacoes_to_insert.append(aloc_data)
+        
+    # Inserir lote
+    try:
+        res = supabase.table("calendario_alocacoes").insert(alocacoes_to_insert).execute()
+        return {"data": res.data or [], "message": f"{len(alocacoes_to_insert)} colaboradores alocados com sucesso."}
+    except Exception as e:
+        logger.error(f"Erro ao criar alocações em lote: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao criar alocações em lote: {str(e)}")
+
 
 @router.delete("/alocacoes/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_alocacao(id: UUID, user: dict = Depends(get_current_user)):
