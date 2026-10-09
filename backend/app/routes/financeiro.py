@@ -16,28 +16,31 @@ async def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(
         raise HTTPException(status_code=500, detail="Database connection not available")
         
     query_receitas = supabase.table("receitas").select("valor, status")
-    query_caixa_pequeno = supabase.table("caixa_pequeno").select("valor, status")
+    query_caixa_pequeno = supabase.table("caixa_pequeno").select("valor, status, referencia_id")
     query_obras = supabase.table("obras").select("valor_aprovado")
     query_funcionarios = supabase.table("pagamentos_funcionarios").select("valor_pago")
+    query_compras = supabase.table("pedidos_compra").select("valor_total, status")
     
     if obra_id:
         query_receitas = query_receitas.eq("obra_id", str(obra_id))
         query_caixa_pequeno = query_caixa_pequeno.eq("obra_id", str(obra_id))
         query_obras = query_obras.eq("id", str(obra_id))
         query_funcionarios = query_funcionarios.eq("obra_id", str(obra_id))
+        query_compras = query_compras.eq("obra_id", str(obra_id))
 
     receitas_res = query_receitas.execute()
     caixa_res = query_caixa_pequeno.execute()
     obras_res = query_obras.execute()
     funcionarios_res = query_funcionarios.execute()
+    compras_res = query_compras.execute()
     
     receita_recebida = sum(r["valor"] for r in receitas_res.data if r["status"] == "recebido")
     receita_prevista = sum(o["valor_aprovado"] or 0 for o in obras_res.data) if obras_res.data else 0
-    despesa_caixa_pequeno = sum(c["valor"] for c in caixa_res.data if c["status"] == "aprovado")
+    despesa_caixa_pequeno = sum(c["valor"] for c in caixa_res.data if c["status"] == "aprovado" and not (c.get("referencia_id") or "").startswith("compra_"))
     despesa_funcionarios = sum(f["valor_pago"] for f in funcionarios_res.data)
     
-    # Mock some data for components not yet implemented (compras, empreiteiros)
-    despesa_compras = 0
+    # Mock some data for components not yet implemented (empreiteiros)
+    despesa_compras = sum(c.get("valor_total") or 0 for c in compras_res.data if c.get("status") in ["aprovado", "pago", "entregue"])
     despesa_empreiteiros = 0
     despesa_total = despesa_caixa_pequeno + despesa_compras + despesa_empreiteiros + despesa_funcionarios
     saldo_operacional = receita_recebida - despesa_total
