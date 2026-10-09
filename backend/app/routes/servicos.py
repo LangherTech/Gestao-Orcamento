@@ -297,7 +297,28 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
     supabase = get_supabase_client()
     now_iso = datetime.utcnow().isoformat()
     orc_id = str(uuid4())
-    numero = orcamento.numero or f"ORC-2026-{len(MOCK_ORCAMENTOS) + 1:03d}"
+    numero = orcamento.numero
+    if not numero:
+        ano = datetime.utcnow().year
+        max_seq = 0
+        if supabase:
+            try:
+                res_nums = supabase.table("orcamentos").select("numero").ilike("numero", f"ORC-{ano}-%").execute()
+                if res_nums.data:
+                    for row in res_nums.data:
+                        num_str = row.get("numero", "")
+                        parts = num_str.split("-")
+                        if len(parts) >= 3 and parts[-1].isdigit():
+                            max_seq = max(max_seq, int(parts[-1]))
+            except Exception as e:
+                logger.warning(f"Erro ao buscar sequência de orçamentos no Supabase: {e}")
+        for o in MOCK_ORCAMENTOS:
+            num_str = o.get("numero", "")
+            if num_str and num_str.startswith(f"ORC-{ano}-"):
+                parts = num_str.split("-")
+                if len(parts) >= 3 and parts[-1].isdigit():
+                    max_seq = max(max_seq, int(parts[-1]))
+        numero = f"ORC-{ano}-{max_seq + 1:03d}"
 
     # Calcular subtotais
     subtotal_geral = 0.0
@@ -393,25 +414,40 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         try:
             head_data = {k: v for k, v in orcamento_dict.items() if k != "itens"}
             res = supabase.table("orcamentos").insert(head_data).execute()
-            if res.data:
-                created_head = res.data[0]
-                itens_to_insert = []
-                for it in itens_processados:
-                    it_data = dict(it)
-                    it_data["orcamento_id"] = created_head["id"]
-                    if "id" in it_data and str(it_data["id"]).startswith("item-"):
-                        del it_data["id"]
-                    if "subtotal" in it_data:
-                        del it_data["subtotal"]
-                    itens_to_insert.append(it_data)
-                if itens_to_insert:
-                    supabase.table("orcamento_itens").insert(itens_to_insert).execute()
-                # Se aprovado e tem obra_id, trigger atualiza obra automaticamente
-                orcamento_dict["id"] = created_head["id"]
-        except Exception as e:
-            logger.warning(f"Erro ao salvar orcamento no Supabase: {e}")
+            if not res.data:
+                raise Exception("Supabase não retornou dados após inserção do orçamento.")
+            created_head = res.data[0]
+            orcamento_dict["id"] = created_head["id"]
 
-    # Atualiza também no mock se aplicável
+            itens_to_insert = []
+            for it in itens_processados:
+                it_data = dict(it)
+                it_data["orcamento_id"] = created_head["id"]
+                if "id" in it_data and str(it_data["id"]).startswith("item-"):
+                    del it_data["id"]
+                if "subtotal" in it_data:
+                    del it_data["subtotal"]
+                for uuid_col in ["servico_id", "material_id", "embalagem_id"]:
+                    val = it_data.get(uuid_col)
+                    if val:
+                        try:
+                            UUID(str(val))
+                        except Exception:
+                            it_data[uuid_col] = None
+                    else:
+                        it_data[uuid_col] = None
+                itens_to_insert.append(it_data)
+
+            if itens_to_insert:
+                supabase.table("orcamento_itens").insert(itens_to_insert).execute()
+
+            orcamento_dict["itens"] = itens_processados
+            return orcamento_dict
+        except Exception as e:
+            logger.error(f"Erro ao salvar orcamento no Supabase: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Erro ao salvar orçamento no banco de dados: {str(e)}")
+
+    # Atualiza no mock apenas se supabase não estiver configurado
     MOCK_ORCAMENTOS.insert(0, orcamento_dict)
     return orcamento_dict
 
@@ -518,11 +554,21 @@ async def update_orcamento(
                         del it_data["id"]
                     if "subtotal" in it_data:
                         del it_data["subtotal"]
+                    for uuid_col in ["servico_id", "material_id", "embalagem_id"]:
+                        val = it_data.get(uuid_col)
+                        if val:
+                            try:
+                                UUID(str(val))
+                            except Exception:
+                                it_data[uuid_col] = None
+                        else:
+                            it_data[uuid_col] = None
                     itens_to_insert.append(it_data)
                 if itens_to_insert:
                     supabase.table("orcamento_itens").insert(itens_to_insert).execute()
         except Exception as e:
-            logger.warning(f"Erro ao atualizar orcamento no Supabase: {e}")
+            logger.error(f"Erro ao atualizar orcamento no Supabase: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Erro ao atualizar orçamento no banco de dados: {str(e)}")
 
     # Atualiza mock
     target_orc = None
