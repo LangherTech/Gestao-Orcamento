@@ -763,7 +763,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
           }`}
         >
           <Calendar className="w-4 h-4" />
-          <span>Visão Mensal (Grade)</span>
+          <span>Calendário</span>
         </button>
 
         <button
@@ -1482,9 +1482,9 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                 };
 
                 return (
-                  <div key={d} className={`min-h-[120px] p-2 border-b border-r border-slate-800/50 hover:bg-slate-800/40 transition-colors ${isToday ? 'bg-emerald-950/20' : ''}`}>
+                  <div key={dateStr} className={`min-h-[120px] p-2 border-b border-r border-slate-800/50 hover:bg-slate-800/40 transition-colors ${isToday ? 'bg-emerald-950/20' : ''}`}>
                     <div className={`text-xs font-semibold mb-2 inline-flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'text-slate-400'}`}>
-                      {d}
+                      {dateObj.getDate()}
                     </div>
                     <div className={`h-full max-h-[105px] overflow-y-auto pr-1 custom-scrollbar ${calendarioModo === 'mensal' ? 'flex flex-wrap items-start gap-1' : 'space-y-1.5'}`}>
                       {/* Colaboradores Escalados */}
