@@ -4,6 +4,7 @@ import {
   DollarSign, Building, AlertCircle, Trash2, Filter, ChevronRight, Phone, Mail
 } from 'lucide-react';
 import api from '../services/api';
+import { formatTelefone, formatCNPJ } from '../utils/masks';
 
 export default function ComprasPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('pedidos'); // 'painel' | 'pedidos' | 'fornecedores'
@@ -67,7 +68,13 @@ export default function ComprasPage({ selectedObraId, obras = [], user }) {
 
   const handleFornInputChange = (e) => {
     const { name, value } = e.target;
-    setFornData(prev => ({ ...prev, [name]: value }));
+    let finalValue = value;
+    if (name === 'telefone') {
+      finalValue = formatTelefone(value);
+    } else if (name === 'cnpj') {
+      finalValue = formatCNPJ(value);
+    }
+    setFornData(prev => ({ ...prev, [name]: finalValue }));
   };
 
   const handleCreateFornecedor = async (e) => {
@@ -374,7 +381,7 @@ export default function ComprasPage({ selectedObraId, obras = [], user }) {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-bold text-white text-lg">{f.nome}</h3>
-                    {f.cnpj && <p className="text-xs text-slate-400 mt-0.5">CNPJ: {f.cnpj}</p>}
+                    {f.cnpj && <p className="text-xs text-slate-400 font-mono mt-0.5">CNPJ: {formatCNPJ(f.cnpj) || f.cnpj}</p>}
                   </div>
                   <div className="p-2 bg-slate-800 rounded-lg text-slate-400">
                     <Building className="w-4 h-4" />
@@ -382,7 +389,7 @@ export default function ComprasPage({ selectedObraId, obras = [], user }) {
                 </div>
                 <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
                   <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <Phone className="w-3.5 h-3.5 text-slate-500" /> {f.telefone || 'N/A'}
+                    <Phone className="w-3.5 h-3.5 text-slate-500" /> {formatTelefone(f.telefone) || f.telefone || 'N/A'}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-slate-300">
                     <Mail className="w-3.5 h-3.5 text-slate-500" /> {f.email || 'N/A'}
@@ -414,12 +421,38 @@ export default function ComprasPage({ selectedObraId, obras = [], user }) {
                   <input type="text" name="nome" required value={fornData.nome} onChange={handleFornInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-300 mb-1.5 block">CNPJ</label>
-                  <input type="text" name="cnpj" value={fornData.cnpj} onChange={handleFornInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-slate-300">CNPJ</label>
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {fornData.cnpj ? `${fornData.cnpj.replace(/\D/g, '').length}/14` : 'Máx 14 dígitos'}
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    name="cnpj" 
+                    value={fornData.cnpj} 
+                    maxLength={18}
+                    placeholder="00.000.000/0000-00"
+                    onChange={handleFornInputChange} 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none font-mono placeholder:text-slate-600" 
+                  />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-slate-300 mb-1.5 block">Telefone</label>
-                  <input type="text" name="telefone" value={fornData.telefone} onChange={handleFornInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-slate-300">Telefone</label>
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {fornData.telefone ? `${fornData.telefone.replace(/\D/g, '').length}/11` : 'Máx 11 dígitos'}
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    name="telefone" 
+                    value={fornData.telefone} 
+                    maxLength={15}
+                    placeholder="(00) 00000-0000"
+                    onChange={handleFornInputChange} 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none font-mono placeholder:text-slate-600" 
+                  />
                 </div>
               </form>
             </div>
