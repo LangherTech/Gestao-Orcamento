@@ -496,7 +496,7 @@ function ServicoForm({ servico, onSave, onCancel, isLoading }) {
               </span>
             </label>
             <input
-              type="number"
+              type="number" onWheel={(e) => e.target.blur()}
               step="0.01"
               min="0"
               value={form.mao_de_obra}
@@ -516,7 +516,7 @@ function ServicoForm({ servico, onSave, onCancel, isLoading }) {
               </span>
             </label>
             <input
-              type="number"
+              type="number" onWheel={(e) => e.target.blur()}
               step="0.01"
               min="0"
               value={form.preco_total}
@@ -536,7 +536,7 @@ function ServicoForm({ servico, onSave, onCancel, isLoading }) {
               </span>
             </label>
             <input
-              type="number"
+              type="number" onWheel={(e) => e.target.blur()}
               step="0.1"
               value={form.margem_lucro}
               onChange={(e) => handleMargemChange(e.target.value)}
@@ -897,7 +897,7 @@ function OrcamentoModal({
 
   const handleUpdateItem = (idx, field, value) => {
     setItens(prev => prev.map((item, i) =>
-      i === idx ? { ...item, [field]: parseFloat(value) || 0 } : item
+      i === idx ? { ...item, [field]: value } : item
     ));
   };
 
@@ -1285,10 +1285,10 @@ function OrcamentoModal({
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Prazo de Realização (dias úteis)</label>
                 <input
-                  type="number"
+                  type="number" onWheel={(e) => e.target.blur()}
                   min="1"
                   value={prazoDias}
-                  onChange={(e) => setPrazoDias(parseInt(e.target.value) || 10)}
+                  onChange={(e) => setPrazoDias(e.target.value)}
                   placeholder="10"
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
@@ -1308,10 +1308,10 @@ function OrcamentoModal({
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Validade da Proposta (dias corridos)</label>
                 <input
-                  type="number"
+                  type="number" onWheel={(e) => e.target.blur()}
                   min="1"
                   value={validadeDias}
-                  onChange={(e) => setValidadeDias(parseInt(e.target.value) || 15)}
+                  onChange={(e) => setValidadeDias(e.target.value)}
                   placeholder="15"
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
@@ -1320,9 +1320,9 @@ function OrcamentoModal({
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Margem / BDI (%)</label>
                 <input
-                  type="number" step="0.1" min="0"
+                  type="number" onWheel={(e) => e.target.blur()} step="0.1" min="0"
                   value={margemBdiPercentual}
-                  onChange={(e) => setMargemBdiPercentual(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setMargemBdiPercentual(e.target.value)}
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
@@ -1330,9 +1330,9 @@ function OrcamentoModal({
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Impostos (%)</label>
                 <input
-                  type="number" step="0.1" min="0"
+                  type="number" onWheel={(e) => e.target.blur()} step="0.1" min="0"
                   value={impostosPercentual}
-                  onChange={(e) => setImpostosPercentual(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setImpostosPercentual(e.target.value)}
                   className="w-full bg-slate-800/60 border border-slate-700/60 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
@@ -1596,7 +1596,7 @@ function OrcamentoModal({
                   <div className="sm:col-span-3">
                     <label className="block text-[11px] text-slate-400 mb-1">Preço Médio (R$)</label>
                     <input
-                      type="number" step="0.01" min="0"
+                      type="number" onWheel={(e) => e.target.blur()} step="0.01" min="0"
                       value={newMaterial.preco_medio}
                       onChange={(e) => setNewMaterial(p => ({ ...p, preco_medio: e.target.value }))}
                       placeholder="0.00"
@@ -1652,7 +1652,7 @@ function OrcamentoModal({
                           <div>
                             <label className="text-[10px] text-slate-500 block uppercase font-semibold">Quantidade</label>
                             <input
-                              type="number" step="0.01" min="0"
+                              type="number" onWheel={(e) => e.target.blur()} step="0.01" min="0"
                               value={item.quantidade}
                               onChange={(e) => handleUpdateItem(idx, 'quantidade', e.target.value)}
                               className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -1661,7 +1661,7 @@ function OrcamentoModal({
                           <div>
                             <label className="text-[10px] text-slate-500 block uppercase font-semibold">Custo Un.</label>
                             <input
-                              type="number" step="0.01" min="0"
+                              type="number" onWheel={(e) => e.target.blur()} step="0.01" min="0"
                               value={item.custo_unitario}
                               onChange={(e) => handleUpdateItem(idx, 'custo_unitario', e.target.value)}
                               className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -1670,7 +1670,7 @@ function OrcamentoModal({
                           <div>
                             <label className="text-[10px] text-slate-500 block uppercase font-semibold">Valor Unitário</label>
                             <input
-                              type="number" step="0.01" min="0"
+                              type="number" onWheel={(e) => e.target.blur()} step="0.01" min="0"
                               value={item.preco_unitario}
                               onChange={(e) => handleUpdateItem(idx, 'preco_unitario', e.target.value)}
                               className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -3081,7 +3081,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                               <div className="flex items-center justify-end gap-1.5">
                                 <span className="text-xs text-slate-500 font-medium">R$</span>
                                 <input
-                                  type="number"
+                                  type="number" onWheel={(e) => e.target.blur()}
                                   step="0.01"
                                   min="0"
                                   value={inlineValores.preco_medio}
@@ -3351,7 +3351,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                 Custo Unitário Global (R$) <span className="text-red-400">*</span>
               </label>
               <input
-                type="number"
+                type="number" onWheel={(e) => e.target.blur()}
                 step="0.01"
                 min="0"
                 required
