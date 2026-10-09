@@ -65,6 +65,23 @@ async def update_etapa(id: UUID, etapa: EtapaUpdate, user: dict = Depends(get_cu
     data = etapa.model_dump(mode="json", exclude_unset=True)
     data["updated_at"] = datetime.now().isoformat()
 
+    # Regras de Negócio:
+    if "data_real_fim" in data:
+        if data["data_real_fim"] is not None:
+            # 1. Etapa pai com sub-etapa pendente não pode ser concluída.
+            sub_etapas_res = supabase.table("etapas").select("id, data_real_fim").eq("etapa_pai_id", str(id)).execute()
+            sub_etapas = sub_etapas_res.data or []
+            pendentes = [sub for sub in sub_etapas if not sub.get("data_real_fim")]
+            if pendentes:
+                raise HTTPException(status_code=400, detail="Não é possível concluir a etapa pois há sub-etapas pendentes.")
+        else:
+            # 2. Reabrir uma sub-etapa de uma etapa pai concluída também reabre a etapa pai.
+            etapa_atual_res = supabase.table("etapas").select("etapa_pai_id").eq("id", str(id)).execute()
+            if etapa_atual_res.data:
+                pai_id = etapa_atual_res.data[0].get("etapa_pai_id")
+                if pai_id:
+                    supabase.table("etapas").update({"data_real_fim": None, "updated_at": datetime.now().isoformat()}).eq("id", pai_id).execute()
+
     try:
         res = supabase.table("etapas").update(data).eq("id", str(id)).execute()
         if res.data:

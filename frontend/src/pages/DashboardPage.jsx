@@ -157,7 +157,10 @@ export default function DashboardPage({ selectedObra, kpis, lucratividadeObras, 
                     )}
                   </div>
                   <span className="text-slate-400">
-                    {formatMoney(item.realizado)} / {formatMoney(item.orcado)} orçados ({item.pct}%)
+                    {item.mostrar_orcado 
+                      ? `${formatMoney(item.realizado)} / ${formatMoney(item.orcado)} orçados (${item.pct}%)`
+                      : `${formatMoney(item.realizado)} realizados`
+                    }
                   </span>
                 </div>
                 <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">

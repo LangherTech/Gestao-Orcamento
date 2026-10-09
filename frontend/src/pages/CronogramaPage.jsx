@@ -99,7 +99,17 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
       fetchData();
     } catch (error) {
       console.error("Erro ao atualizar etapa:", error);
-      alert("Falha ao atualizar o status da etapa.");
+      alert(error.response?.data?.detail || "Falha ao atualizar o status da etapa.");
+    }
+  };
+
+  const handleReabrirEtapa = async (id) => {
+    try {
+      await api.put(`/cronograma/etapas/${id}`, { data_real_fim: null });
+      fetchData();
+    } catch (error) {
+      console.error("Erro ao reabrir etapa:", error);
+      alert("Falha ao reabrir a etapa.");
     }
   };
 
@@ -221,6 +231,11 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
                         Concluir
                       </button>
                     )}
+                    {etapa.data_real_fim && (
+                      <button onClick={() => handleReabrirEtapa(etapa.id)} className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                        Reabrir
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDeleteEtapa(etapa.id, etapa.nome)}
                       className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
@@ -260,6 +275,11 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
                             {sub.data_real_inicio && !sub.data_real_fim && (
                               <button onClick={() => handleToggleEtapaStatus(sub.id, false, true)} className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
                                 Concluir
+                              </button>
+                            )}
+                            {sub.data_real_fim && (
+                              <button onClick={() => handleReabrirEtapa(sub.id)} className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                                Reabrir
                               </button>
                             )}
                             <button

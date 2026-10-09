@@ -51,6 +51,33 @@ async def get_kpis(obra_id: Optional[UUID] = Query(None), user: dict = Depends(g
     if receita_total > 0:
         margem_media_pct = (lucro_projetado / receita_total) * 100
         
+    percentual_geral_conclusao = 0
+    if obras_ids:
+        etapas_res = supabase.table("etapas").select("id, obra_id, etapa_pai_id, data_real_fim").in_("obra_id", obras_ids).execute()
+        etapas = etapas_res.data or []
+        
+        # Group by obra
+        obras_progresso = []
+        for o_id in obras_ids:
+            o_etapas = [e for e in etapas if e["obra_id"] == o_id]
+            pais = [e for e in o_etapas if not e["etapa_pai_id"]]
+            if not pais:
+                obras_progresso.append(0.0)
+                continue
+                
+            soma_pct = 0.0
+            for pai in pais:
+                subs = [e for e in o_etapas if e["etapa_pai_id"] == pai["id"]]
+                if subs:
+                    concluidas = sum(1 for s in subs if s.get("data_real_fim"))
+                    soma_pct += (concluidas / len(subs)) * 100
+                else:
+                    soma_pct += 100 if pai.get("data_real_fim") else 0
+            obras_progresso.append(soma_pct / len(pais))
+            
+        if obras_progresso:
+            percentual_geral_conclusao = sum(obras_progresso) / len(obras_progresso)
+        
     return {
         "obra_id": str(obra_id) if obra_id else None,
         "receita_total": round(receita_total, 2),
@@ -58,7 +85,7 @@ async def get_kpis(obra_id: Optional[UUID] = Query(None), user: dict = Depends(g
         "lucro_projetado": round(lucro_projetado, 2),
         "margem_media_pct": round(margem_media_pct, 2),
         "obras_ativas": obras_ativas_count,
-        "percentual_geral_conclusao": 0 # Temporariamente 0 se não tivermos etapas no banco local
+        "percentual_geral_conclusao": round(percentual_geral_conclusao, 2)
     }
 
 @router.get("/lucratividade-por-obra")
@@ -130,20 +157,13 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
     orcado_caixa = 0.0
 
     for o in obras:
-        total = float(o.get("valor_aprovado") or 0)
         mat = float(o.get("orcamento_materiais") or 0)
-        emp = float(o.get("orcamento_empreiteiros") or 0)
-        cax = float(o.get("orcamento_caixa") or 0)
-
-        # Se as categorias não foram preenchidas mas existe orçamento total, faz fallback proporcional
-        if mat == 0 and emp == 0 and cax == 0 and total > 0:
-            mat = round(total * 0.55, 2)
-            emp = round(total * 0.40, 2)
-            cax = round(total * 0.05, 2)
-
+        # Terceiros e Caixa Pequeno não têm previsto como limite, então zeramos o orçado
+        # para que só mostrem o realizado. A regra também diz que Mão de Obra Própria pode ter limite.
         orcado_materiais += mat
-        orcado_empreiteiros += emp
-        orcado_caixa += cax
+
+    # Mão de Obra Própria (Funcionários) não tem campo na obra atualmente, 
+    # se não há orçado, não inventa. Vamos manter orcado=0 para eles a menos que haja um campo no futuro.
 
     realizado_materiais = 0.0
     realizado_empreiteiros = 0.0
@@ -160,7 +180,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
         compras_query = supabase.table("pedidos_compra").select("valor_total").in_("obra_id", obras_ids).in_("status", ["aprovado", "recebido", "pago"]).execute()
         realizado_materiais = sum(float(c.get("valor_total") or 0) for c in (compras_query.data or []))
 
-        # Empreiteiros
+        # Empreiteiros (Terceiros)
         contratos_query = supabase.table("contratos_empreiteiro").select("id").in_("obra_id", obras_ids).execute()
         contratos_ids = [str(c["id"]) for c in (contratos_query.data or [])]
         if contratos_ids:
@@ -173,7 +193,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
 
     def calc_pct(real, orc):
         if orc <= 0:
-            return 100.0 if real > 0 else 0.0
+            return 0.0
         return round((real / orc) * 100, 1)
 
     return [
@@ -184,16 +204,8 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_materiais, 2),
             "pct": calc_pct(realizado_materiais, orcado_materiais),
             "cor": "bg-blue-500",
-            "excedeu": realizado_materiais > orcado_materiais
-        },
-        {
-            "id": "empreiteiros",
-            "categoria": "Empreiteiros & Terceirizados",
-            "realizado": round(realizado_empreiteiros, 2),
-            "orcado": round(orcado_empreiteiros, 2),
-            "pct": calc_pct(realizado_empreiteiros, orcado_empreiteiros),
-            "cor": "bg-amber-500",
-            "excedeu": realizado_empreiteiros > orcado_empreiteiros
+            "excedeu": orcado_materiais > 0 and realizado_materiais > orcado_materiais,
+            "mostrar_orcado": orcado_materiais > 0
         },
         {
             "id": "funcionarios",
@@ -202,16 +214,28 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_funcionarios, 2),
             "pct": calc_pct(realizado_funcionarios, orcado_funcionarios),
             "cor": "bg-purple-500",
-            "excedeu": realizado_funcionarios > orcado_funcionarios
+            "excedeu": orcado_funcionarios > 0 and realizado_funcionarios > orcado_funcionarios,
+            "mostrar_orcado": orcado_funcionarios > 0
+        },
+        {
+            "id": "empreiteiros",
+            "categoria": "Empreiteiros & Terceirizados",
+            "realizado": round(realizado_empreiteiros, 2),
+            "orcado": 0.0,
+            "pct": 0.0,
+            "cor": "bg-amber-500",
+            "excedeu": False,
+            "mostrar_orcado": False
         },
         {
             "id": "caixa",
             "categoria": "Caixa Pequeno do Canteiro",
             "realizado": round(realizado_caixa, 2),
-            "orcado": round(orcado_caixa, 2),
-            "pct": calc_pct(realizado_caixa, orcado_caixa),
+            "orcado": 0.0,
+            "pct": 0.0,
             "cor": "bg-emerald-500",
-            "excedeu": realizado_caixa > orcado_caixa
+            "excedeu": False,
+            "mostrar_orcado": False
         }
     ]
 
