@@ -115,6 +115,25 @@ export function exportCronogramaPDF(etapas, obraNome = 'Obra', clienteNome = '',
 
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
+  const logoHtml = COMPANY_LOGO_URL
+    ? `<img src="${COMPANY_LOGO_URL}" alt="Edifica" style="height: 48px; display: block; margin: 0 auto 12px auto;" />`
+    : `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px;">
+        <svg style="width: 32px; height: 32px; color: #0e2744;" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M22 82V34L50 14L78 34V82H64V42L50 28L36 42V82H22Z" />
+          <rect x="44" y="46" width="12" height="36" rx="1" fill="currentColor" />
+        </svg>
+        <div style="text-align: left;">
+          <div style="font-size: 22px; font-weight: 900; color: #0e2744; line-height: 1; letter-spacing: -0.5px; font-family: 'Inter', Arial, sans-serif;">
+            Edifica
+          </div>
+          <div style="font-size: 7.5px; font-weight: 700; color: #475569; letter-spacing: 0.28em; text-transform: uppercase; margin-top: 3px; font-family: 'Inter', Arial, sans-serif;">
+            SOLUÇÕES EM OBRAS
+          </div>
+        </div>
+      </div>
+    `;
+
   let htmlPages = '';
 
   dayChunks.forEach((days, chunkIndex) => {
@@ -146,33 +165,13 @@ export function exportCronogramaPDF(etapas, obraNome = 'Obra', clienteNome = '',
     // Cabeçalho da primeira folha
     const isFirstPage = chunkIndex === 0;
     const headerHtml = isFirstPage ? `
+      ${logoHtml}
+      <h1 style="text-align: center; font-size: 13pt; font-weight: 900; letter-spacing: 0.05em; color: #0e2744; text-transform: uppercase; margin-bottom: 10px;">
+        CRONOGRAMA DE EXECUÇÃO
+      </h1>
       <div class="header">
-        <div class="header-left">
-          <div class="company-name">Edifica Soluções em Obras</div>
-          <div class="report-title">Cronograma da obra</div>
-        </div>
-        <div class="header-right">
-          <table class="info-table">
-            <tr>
-              <td class="info-label">Cliente</td>
-              <td class="info-value">${clienteNome || '-'}</td>
-            </tr>
-            <tr>
-              <td class="info-label">Obra</td>
-              <td class="info-value">${obraNome || '-'}</td>
-            </tr>
-            <tr>
-              <td class="info-label">Início</td>
-              <td class="info-value">${headerInicio}</td>
-            </tr>
-            <tr>
-              <td class="info-label">Previsão de entrega</td>
-              <td class="info-value">${headerFim}</td>
-            </tr>
-          </table>
-        </div>
+        <p style="margin: 4px 0 0 0; color: #64748b; font-size: 11pt;">Obra: <strong>${obraNome}</strong></p>
       </div>
-      <div class="header-line"></div>
     ` : '';
 
     // Renderizar linhas do cronograma
@@ -307,45 +306,10 @@ export function exportCronogramaPDF(etapas, obraNome = 'Obra', clienteNome = '',
             padding-top: 5mm;
           }
           .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-          }
-          .company-name {
-            font-size: 16.5pt;
-            font-weight: 800;
-            color: #0f172a;
-            letter-spacing: -0.3px;
-          }
-          .report-title {
-            font-size: 9.5pt;
-            color: #64748b;
-            margin-top: 3px;
-            font-weight: 500;
-          }
-          .info-table {
-            border-collapse: collapse;
-            font-size: 8.5pt;
-          }
-          .info-table td {
-            padding: 1.5px 0;
-          }
-          .info-label {
-            color: #475569;
-            font-weight: 500;
-            padding-right: 28px !important;
-            text-align: left;
-          }
-          .info-value {
-            color: #0f172a;
-            font-weight: 700;
-            text-align: left;
-          }
-          .header-line {
-            height: 1px;
-            background-color: #cbd5e1;
-            margin-bottom: 14px;
+            border-bottom: 2px solid #cbd5e1;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+            text-align: center;
           }
           .gantt-table {
             width: 100%;
