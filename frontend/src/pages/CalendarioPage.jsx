@@ -1262,19 +1262,33 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
         <div className="space-y-4">
           {/* Barra de Controles: Navegação e Modos de Visualização */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-lg">
-            {/* Navegação de Mês */}
+            {/* Navegação */}
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} 
+                onClick={() => {
+                  if (calendarioModo === 'semanal') {
+                    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 7));
+                  } else {
+                    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+                  }
+                }} 
                 className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
               >
                 Anterior
               </button>
               <h3 className="text-base font-bold text-white capitalize min-w-[140px] text-center">
-                {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                {calendarioModo === 'semanal' 
+                  ? `Semana ${currentDate.getDate()}/${currentDate.getMonth() + 1}`
+                  : currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
               </h3>
               <button 
-                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} 
+                onClick={() => {
+                  if (calendarioModo === 'semanal') {
+                    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7));
+                  } else {
+                    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+                  }
+                }} 
                 className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
               >
                 Próximo
@@ -1283,6 +1297,31 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
 
             {/* Switcher dos 3 Modos de Visualização */}
             <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex p-1 rounded-xl bg-slate-950 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCalendarioModo('mensal')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    calendarioModo === 'mensal' 
+                      ? 'bg-emerald-600 text-white shadow' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Mensal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarioModo('semanal')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    calendarioModo === 'semanal' 
+                      ? 'bg-emerald-600 text-white shadow' 
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Semanal
+                </button>
+              </div>
+
               <div className="inline-flex p-1 rounded-xl bg-slate-950 border border-slate-800">
                 <button
                   type="button"
@@ -1349,20 +1388,38 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
             </div>
           </div>
 
-          {/* Legenda Informativa */}
-          <div className="flex flex-wrap items-center gap-4 px-3 py-2 bg-slate-950/40 border border-slate-800/60 rounded-xl text-[11px] text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>
-              <span>Colaborador Presente (cor do líder da equipe)</span>
+          {/* Legenda Informativa e de Líderes */}
+          <div className="flex flex-col gap-2 bg-slate-950/40 border border-slate-800/60 rounded-xl p-3">
+            <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>
+                <span>Colaborador Padrão (Sem Equipe)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/40">FALTA</span>
+                <span>Falta Registrada (clique p/ confirmar presença)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-amber-500/30 text-amber-300 border border-amber-500/40">[Terceiro]</span>
+                <span>Contrato de Terceiro em Execução</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-rose-500/30 text-rose-300 border border-rose-500/40">FALTA</span>
-              <span>Falta Registrada (clique p/ confirmar presença)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-amber-500/30 text-amber-300 border border-amber-500/40">[Terceiro]</span>
-              <span>Contrato de Terceiro em Execução</span>
-            </div>
+            
+            {/* Equipes Dinâmicas */}
+            {equipes.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800/50">
+                <span className="text-[10px] font-bold uppercase text-slate-500">Equipes / Líderes:</span>
+                {equipes.map(eq => (
+                  <div key={eq.id} className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <span 
+                      className="w-2.5 h-2.5 rounded-full inline-block shadow-sm"
+                      style={{ backgroundColor: eq.funcionarios?.cor || '#6366f1' }}
+                    ></span>
+                    <span>{eq.nome}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Grade do Calendário */}
@@ -1373,12 +1430,20 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
               ))}
             </div>
             <div className="grid grid-cols-7 auto-rows-fr">
-              {Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() }).map((_, b) => (
+              {calendarioModo === 'mensal' && Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() }).map((_, b) => (
                 <div key={`blank-${b}`} className="min-h-[120px] p-2 border-b border-r border-slate-800/50 bg-slate-950/30"></div>
               ))}
-              {Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate() }).map((_, idx) => {
-                const d = idx + 1;
-                const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+              {(calendarioModo === 'mensal' 
+                ? Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate() }).map((_, idx) => new Date(currentDate.getFullYear(), currentDate.getMonth(), idx + 1))
+                : Array.from({ length: 7 }).map((_, idx) => {
+                    const startOfWeek = new Date(currentDate);
+                    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+                    const d = new Date(startOfWeek);
+                    d.setDate(startOfWeek.getDate() + idx);
+                    return d;
+                  })
+              ).map((dateObj, renderIdx) => {
+                const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
                 
                 // Filtro de alocações conforme modo selecionado
                 const dayAlocs = alocacoes.filter(a => {
@@ -1421,17 +1486,27 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                     <div className={`text-xs font-semibold mb-2 inline-flex items-center justify-center w-6 h-6 rounded-full ${isToday ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'text-slate-400'}`}>
                       {d}
                     </div>
-                    <div className="space-y-1.5 h-full max-h-[105px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div className={`h-full max-h-[105px] overflow-y-auto pr-1 custom-scrollbar ${calendarioModo === 'mensal' ? 'flex flex-wrap items-start gap-1' : 'space-y-1.5'}`}>
                       {/* Colaboradores Escalados */}
                       {dayAlocs.map(a => {
                         const faltaAtiva = isFalta(a.funcionario_id, dateStr);
                         const leaderCol = getLeaderColor(a);
 
                         if (faltaAtiva) {
+                          if (calendarioModo === 'mensal') {
+                            return (
+                              <div 
+                                key={a.id} 
+                                onClick={(e) => { e.stopPropagation(); handleToggleFalta(a.funcionario_id, a.obra_id, dateStr); }}
+                                className="w-5 h-5 flex items-center justify-center rounded bg-rose-500/80 text-white text-[9px] font-bold cursor-pointer shadow-sm flex-shrink-0"
+                                title={`${a.funcionario_nome} - FALTA. Clique para presença.`}
+                              >F</div>
+                            );
+                          }
                           return (
                             <div 
                               key={a.id} 
-                              onClick={() => handleToggleFalta(a.funcionario_id, a.obra_id, dateStr)}
+                              onClick={(e) => { e.stopPropagation(); handleToggleFalta(a.funcionario_id, a.obra_id, dateStr); }}
                               className="px-2 py-1 text-[9px] leading-tight rounded border font-medium truncate shadow-sm cursor-pointer transition-all bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30 flex items-center justify-between group"
                               title={`${a.funcionario_nome} - FALTA em ${a.obra}. Clique para confirmar presença.`}
                             >
@@ -1445,6 +1520,18 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                         }
 
                         // Presença Normal
+                        if (calendarioModo === 'mensal') {
+                          return (
+                            <div 
+                              key={a.id}
+                              onClick={(e) => { e.stopPropagation(); handleToggleFalta(a.funcionario_id, a.obra_id, dateStr); }}
+                              className={`w-4 h-4 rounded-full cursor-pointer shadow-sm flex-shrink-0 ${leaderCol ? '' : getHashColor(a.funcionario_nome)}`}
+                              style={leaderCol ? { backgroundColor: leaderCol } : {}}
+                              title={`${a.funcionario_nome} - ${a.obra}`}
+                            ></div>
+                          );
+                        }
+
                         const customStyle = leaderCol ? {
                           backgroundColor: `${leaderCol}22`,
                           borderColor: `${leaderCol}55`,
@@ -1485,17 +1572,28 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                       })}
 
                       {/* Terceiros em Execução */}
-                      {dayContratos.map(c => (
-                        <div 
-                          key={`terceiro-${c.id}`} 
-                          className="px-2 py-1 text-[9px] leading-tight rounded border font-medium truncate shadow-sm bg-amber-500/20 text-amber-300 border-amber-500/40 flex items-center gap-1"
-                          title={`Contrato de Terceiro: ${c.empreiteiro_nome} - ${c.obra_nome || 'Obra'}`}
-                        >
-                          <span className="px-1 py-0.2 rounded text-[7px] font-bold bg-amber-500/40 text-amber-200">[Terceiro]</span>
-                          <span className="font-bold truncate">{c.empreiteiro_nome}</span>
-                          <span className="opacity-75 truncate text-[8px]">({c.obra_nome})</span>
-                        </div>
-                      ))}
+                      {dayContratos.map(c => {
+                        if (calendarioModo === 'mensal') {
+                          return (
+                            <div 
+                              key={`terceiro-${c.id}`} 
+                              className="w-4 h-4 flex items-center justify-center rounded bg-amber-500/80 text-white text-[8px] font-bold shadow-sm flex-shrink-0"
+                              title={`[Terceiro] ${c.empreiteiro_nome}`}
+                            >T</div>
+                          );
+                        }
+                        return (
+                          <div 
+                            key={`terceiro-${c.id}`} 
+                            className="px-2 py-1 text-[9px] leading-tight rounded border font-medium truncate shadow-sm bg-amber-500/20 text-amber-300 border-amber-500/40 flex items-center gap-1"
+                            title={`Contrato de Terceiro: ${c.empreiteiro_nome} - ${c.obra_nome || 'Obra'}`}
+                          >
+                            <span className="px-1 py-0.2 rounded text-[7px] font-bold bg-amber-500/40 text-amber-200">[Terceiro]</span>
+                            <span className="font-bold truncate">{c.empreiteiro_nome}</span>
+                            <span className="opacity-75 truncate text-[8px]">({c.obra_nome})</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
