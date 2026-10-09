@@ -3,10 +3,33 @@ import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListC
 import api from '../services/api';
 import { exportCronogramaPDF, exportCronogramaTabelaPDF } from '../components/CronogramaPDF';
 
-export default function CronogramaPage({ selectedObraId }) {
+export default function CronogramaPage({ selectedObraId, selectedObra, obras = [] }) {
   const [etapas, setEtapas] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [obraInfo, setObraInfo] = useState(null);
+
+  useEffect(() => {
+    if (selectedObra) {
+      setObraInfo(selectedObra);
+    } else if (obras && obras.length > 0 && selectedObraId) {
+      const found = obras.find(o => o.id === selectedObraId);
+      if (found) setObraInfo(found);
+    } else if (selectedObraId) {
+      api.get('/obras?arquivada=all')
+        .then(res => {
+          if (res.data && Array.isArray(res.data)) {
+            const found = res.data.find(o => o.id === selectedObraId);
+            if (found) setObraInfo(found);
+          }
+        })
+        .catch(err => console.error("Erro ao carregar dados da obra:", err));
+    }
+  }, [selectedObra, obras, selectedObraId]);
+
+  const currentObra = selectedObra || obraInfo || (obras && obras.find(o => o.id === selectedObraId)) || null;
+  const currentObraNome = currentObra?.nome || (selectedObraId ? 'Obra' : 'Geral');
+  const currentClienteNome = currentObra?.cliente || '';
   
   // State for the new etapa form
   const [formEtapa, setFormEtapa] = useState({
@@ -117,7 +140,7 @@ export default function CronogramaPage({ selectedObraId }) {
           </button>
           <div className="flex gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800">
             <button 
-              onClick={() => exportCronogramaPDF(etapas, "Obra Selecionada")}
+              onClick={() => exportCronogramaPDF(etapas, currentObraNome)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
               title="Gráfico de Gantt"
             >
@@ -125,7 +148,7 @@ export default function CronogramaPage({ selectedObraId }) {
               <span>Gantt</span>
             </button>
             <button 
-              onClick={() => exportCronogramaTabelaPDF(etapas, "Obra Selecionada")}
+              onClick={() => exportCronogramaTabelaPDF(etapas, currentObraNome, currentClienteNome)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
               title="Tabela de Prazos"
             >

@@ -208,7 +208,7 @@ export function exportCronogramaPDF(etapas, obraNome = 'Obra') {
   }, 400);
 }
 
-export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra') {
+export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra', clienteNome = '') {
   if (!etapas || etapas.length === 0) {
     alert("Não há etapas para gerar o cronograma.");
     return;
@@ -331,7 +331,7 @@ export function exportCronogramaTabelaPDF(etapas, obraNome = 'Obra') {
           </div>
           <div class="sig-box">
             <div class="sig-line"></div>
-            <div style="font-weight: 800; font-size: 8.5pt; color: #0f172a;">CONTRATANTE / FISCAL</div>
+            <div style="font-weight: 800; font-size: 8.5pt; color: #0f172a;">${(clienteNome || 'CONTRATANTE / FISCAL').toUpperCase()}</div>
             <div style="font-size: 7.5pt; color: #475569;">Fiscalização / Visto do Cliente</div>
           </div>
         </div>

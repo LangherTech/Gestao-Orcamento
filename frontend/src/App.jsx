@@ -245,7 +245,14 @@ export default function App() {
                     user={session?.user}
                   />
                 )}
-                {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} user={session?.user} />}
+                {activeTab === 'cronograma' && (
+                  <CronogramaPage 
+                    selectedObraId={selectedObraId} 
+                    selectedObra={selectedObra} 
+                    obras={obras} 
+                    user={session?.user} 
+                  />
+                )}
                 {activeTab === 'rdo' && <RDOPage selectedObraId={selectedObraId} user={session?.user} />}
                 {activeTab === 'compras' && <ComprasPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
                 {activeTab === 'gestao' && <GestaoPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
