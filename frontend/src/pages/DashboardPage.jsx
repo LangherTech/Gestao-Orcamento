@@ -58,7 +58,7 @@ export default function DashboardPage({ selectedObra, kpis, lucratividadeObras, 
           </div>
           <div className="mt-2 flex items-center text-xs text-amber-400 gap-1 font-medium">
             <ArrowDownRight className="w-3.5 h-3.5" />
-            <span>Compras + Empreiteiros + Caixa</span>
+            <span>Compras + Empreiteiros + Caixa + Funcionários</span>
           </div>
         </div>
 

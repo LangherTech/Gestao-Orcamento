@@ -111,11 +111,11 @@ async def update_pedido_status(id: UUID, status: str = Query(...), user: dict = 
             
             despesa = {
                 "obra_id": pedido["obra_id"],
-                "tipo": "saida",
                 "valor": float(pedido["valor_total"]),
                 "descricao": f"Pagamento Fornecedor ({fornecedor_nome}) - Pedido {pedido['numero']}",
-                "categoria": "Materiais e Insumos",
-                "data_movimento": datetime.now().isoformat(),
+                "categoria": "Material",
+                "data": datetime.now().isoformat()[:10],
+                "status": "aprovado",
                 "referencia_id": ref_id,
                 "created_by": None if user.get("is_mock") else user.get("id")
             }

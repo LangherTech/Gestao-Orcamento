@@ -180,13 +180,11 @@ async def create_pagamento(pag: PagamentoTerceiroCreate, user: dict = Depends(ge
                 
                 caixa_data = {
                     "obra_id": obra_id,
-                    "tipo": "despesa",
-                    "categoria": "Terceirizados",
+                    "categoria": "Outro",
                     "descricao": f"Pagamento Terceiro: {empreiteiro_nome}",
                     "valor": db_data["valor_pagar"],
-                    "data_registro": db_data["data_medicao"],
-                    "status": "realizado",
-                    "metodo_pagamento": db_data.get("tipo_pagamento", "Transferência"),
+                    "data": db_data["data_medicao"],
+                    "status": "aprovado",
                     "referencia_id": medicao["id"]
                 }
                 if not user.get("is_mock"):

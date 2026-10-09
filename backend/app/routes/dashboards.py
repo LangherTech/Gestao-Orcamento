@@ -42,6 +42,10 @@ async def get_kpis(obra_id: Optional[UUID] = Query(None), user: dict = Depends(g
             medicoes_query = supabase.table("medicoes_empreiteiro").select("valor_pagar").in_("contrato_id", contratos_ids).execute()
             despesas_totais += sum(float(m.get("valor_pagar") or 0) for m in medicoes_query.data)
             
+        # Funcionários
+        funcionarios_query = supabase.table("pagamentos_funcionarios").select("valor_pago").in_("obra_id", obras_ids).execute()
+        despesas_totais += sum(float(f.get("valor_pago") or 0) for f in funcionarios_query.data)
+            
     lucro_projetado = receita_total - despesas_totais
     margem_media_pct = 0
     if receita_total > 0:
@@ -88,7 +92,11 @@ async def get_lucratividade_por_obra(user: dict = Depends(get_current_user)):
             medicoes_query = supabase.table("medicoes_empreiteiro").select("valor_pagar").in_("contrato_id", contratos_ids).execute()
             despesa_medicoes = sum(float(m.get("valor_pagar") or 0) for m in medicoes_query.data)
             
-        despesa_total = despesa_caixa + despesa_compras + despesa_medicoes
+        despesa_funcionarios = 0
+        funcionarios_query = supabase.table("pagamentos_funcionarios").select("valor_pago").eq("obra_id", obra_id).execute()
+        despesa_funcionarios = sum(float(f.get("valor_pago") or 0) for f in funcionarios_query.data)
+            
+        despesa_total = despesa_caixa + despesa_compras + despesa_medicoes + despesa_funcionarios
         lucro = receita - despesa_total
         margem = (lucro / receita * 100) if receita > 0 else 0
         
@@ -159,9 +167,13 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             medicoes_query = supabase.table("medicoes_empreiteiro").select("valor_pagar").in_("contrato_id", contratos_ids).execute()
             realizado_empreiteiros = sum(float(m.get("valor_pagar") or 0) for m in (medicoes_query.data or []))
 
+        # Funcionários (Mão de Obra Própria)
+        funcionarios_query = supabase.table("pagamentos_funcionarios").select("valor_pago").in_("obra_id", obras_ids).execute()
+        realizado_funcionarios = sum(float(f.get("valor_pago") or 0) for f in (funcionarios_query.data or []))
+
     def calc_pct(real, orc):
         if orc <= 0:
-            return 0.0
+            return 100.0 if real > 0 else 0.0
         return round((real / orc) * 100, 1)
 
     return [
@@ -172,7 +184,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_materiais, 2),
             "pct": calc_pct(realizado_materiais, orcado_materiais),
             "cor": "bg-blue-500",
-            "excedeu": realizado_materiais > orcado_materiais if orcado_materiais > 0 else False
+            "excedeu": realizado_materiais > orcado_materiais
         },
         {
             "id": "empreiteiros",
@@ -181,7 +193,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_empreiteiros, 2),
             "pct": calc_pct(realizado_empreiteiros, orcado_empreiteiros),
             "cor": "bg-amber-500",
-            "excedeu": realizado_empreiteiros > orcado_empreiteiros if orcado_empreiteiros > 0 else False
+            "excedeu": realizado_empreiteiros > orcado_empreiteiros
         },
         {
             "id": "funcionarios",
@@ -190,7 +202,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_funcionarios, 2),
             "pct": calc_pct(realizado_funcionarios, orcado_funcionarios),
             "cor": "bg-purple-500",
-            "excedeu": realizado_funcionarios > orcado_funcionarios if orcado_funcionarios > 0 else False
+            "excedeu": realizado_funcionarios > orcado_funcionarios
         },
         {
             "id": "caixa",
@@ -199,7 +211,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
             "orcado": round(orcado_caixa, 2),
             "pct": calc_pct(realizado_caixa, orcado_caixa),
             "cor": "bg-emerald-500",
-            "excedeu": realizado_caixa > orcado_caixa if orcado_caixa > 0 else False
+            "excedeu": realizado_caixa > orcado_caixa
         }
     ]
 

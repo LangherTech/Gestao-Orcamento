@@ -666,6 +666,8 @@ function OrcamentoModal({
   const [autoSaving, setAutoSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [currentId, setCurrentId] = useState(null);
+  const [subtotalBackend, setSubtotalBackend] = useState(0);
+  const [valorTotalBackend, setValorTotalBackend] = useState(0);
 
   // Busca e Filtros
   const [itemSearchTerm, setItemSearchTerm] = useState('');
@@ -718,6 +720,8 @@ function OrcamentoModal({
       setImpostosPercentual(initialOrcamento.impostos_percentual ?? 20.5);
       setModoExibicao(initialOrcamento.modo_exibicao || 'resumido');
       setFornecimentoMateriais(initialOrcamento.fornecimento_materiais || 'edifica');
+      setSubtotalBackend(Number(initialOrcamento.subtotal) || 0);
+      setValorTotalBackend(Number(initialOrcamento.valor_total) || 0);
       setItens(
         (initialOrcamento.orcamento_itens || initialOrcamento.itens || []).map(it => ({
           servico_id: it.servico_id,
@@ -749,6 +753,8 @@ function OrcamentoModal({
       setImpostosPercentual(20.5);
       setModoExibicao('resumido');
       setFornecimentoMateriais('edifica');
+      setSubtotalBackend(0);
+      setValorTotalBackend(0);
       setItens([]);
       setStep(1);
       setCurrentId(null);
@@ -909,10 +915,64 @@ function OrcamentoModal({
     }
   };
 
-  const subtotalBruto = itens.reduce((sum, item) => sum + ((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade)), 0);
-  const totalLiquido = subtotalBruto;
-  const fatorAcrescimo = 1 + ((margemBdiPercentual + impostosPercentual) / 100);
-  const valorTotalFinal = totalLiquido * fatorAcrescimo;
+  const subtotalBruto = subtotalBackend;
+  const totalLiquido = subtotalBackend;
+  const valorTotalFinal = valorTotalBackend;
+
+  const buildOrcamentoPayload = (statusOverride = null) => {
+    const targetStatus = statusOverride || status;
+    const contactParts = [];
+    if (pessoaContato.trim()) contactParts.push(`Contato: ${pessoaContato.trim()}`);
+    if (clienteTelefone.trim()) contactParts.push(clienteTelefone.trim());
+    if (clienteEmail.trim()) contactParts.push(clienteEmail.trim());
+    const combinedContato = contactParts.join(' • ');
+
+    const payload = {
+      obra_id: obraId || null,
+      cliente_nome: clienteNome.trim() || 'Rascunho de Orçamento',
+      pessoa_contato: pessoaContato.trim() || null,
+      cliente_contato: combinedContato || null,
+      cliente_telefone: clienteTelefone.trim() || null,
+      cliente_email: clienteEmail.trim() || null,
+      cliente_endereco: clienteEndereco.trim() || null,
+      prazo_dias: prazoDias,
+      prazo_garantia: prazoGarantia,
+      objetivo: objetivoCustom.trim() || null,
+      validade_dias: validadeDias,
+      status: targetStatus,
+      observacoes: observacoes.trim() || null,
+      notas: notas.trim() || null,
+      condicao_pagamento: condicoesPagamentoCustom.trim() || null,
+      modo_exibicao: modoExibicao,
+    };
+
+    // Não envia itens e totais se o orçamento já está aprovado e continua aprovado,
+    // para evitar que o backend bloqueie o salvamento dos demais campos.
+    const initialStatus = initialOrcamento?.status || 'rascunho';
+    const isApprovedAndStayingApproved = initialStatus === 'aprovado' && targetStatus === 'aprovado';
+
+    if (!isApprovedAndStayingApproved) {
+      payload.margem_bdi_percentual = margemBdiPercentual;
+      payload.impostos_percentual = impostosPercentual;
+      payload.fornecimento_materiais = fornecimentoMateriais;
+      payload.itens = itens.map(i => ({
+        servico_id: i.servico_id || null,
+        material_id: i.material_id || null,
+        tipo: i.tipo,
+        descricao: i.servico_nome || i.descricao,
+        quantidade: Number(i.quantidade) || 0,
+        preco_unitario: Number(i.preco_unitario) || 0,
+        fornecido_por: i.fornecido_por || 'Edifica',
+        unidade: i.unidade,
+        preco_catalogo: i.preco_catalogo,
+        embalagem_id: i.embalagem_id || null,
+        origem_assistente: i.origem_assistente || false,
+        assistente_execucao_id: i.assistente_execucao_id || null,
+      }));
+    }
+
+    return payload;
+  };
 
   const handleSaveOrcamento = async (statusOverride = null) => {
     if (!clienteNome.trim()) {
@@ -938,47 +998,7 @@ function OrcamentoModal({
     setSaving(true);
     setErrorMsg('');
     try {
-      const targetStatus = statusOverride || status;
-      const contactParts = [];
-      if (pessoaContato.trim()) contactParts.push(`Contato: ${pessoaContato.trim()}`);
-      if (clienteTelefone.trim()) contactParts.push(clienteTelefone.trim());
-      if (clienteEmail.trim()) contactParts.push(clienteEmail.trim());
-      const combinedContato = contactParts.join(' • ');
-
-      const payload = {
-        obra_id: obraId || null,
-        cliente_nome: clienteNome.trim(),
-        pessoa_contato: pessoaContato.trim() || null,
-        cliente_contato: combinedContato || null,
-        cliente_telefone: clienteTelefone.trim() || null,
-        cliente_email: clienteEmail.trim() || null,
-        cliente_endereco: clienteEndereco.trim() || null,
-        prazo_dias: prazoDias,
-        prazo_garantia: prazoGarantia,
-        objetivo: objetivoCustom.trim() || null,
-        validade_dias: validadeDias,
-        status: targetStatus,
-        observacoes: observacoes.trim() || null,
-        notas: notas.trim() || null,
-        margem_bdi_percentual: margemBdiPercentual,
-        impostos_percentual: impostosPercentual,
-        condicao_pagamento: condicoesPagamentoCustom.trim() || null,
-        modo_exibicao: modoExibicao,
-        fornecimento_materiais: fornecimentoMateriais,
-        itens: itens.map(i => ({
-          servico_id: i.servico_id || null,
-          material_id: i.material_id || null,
-          tipo: i.tipo,
-          descricao: i.servico_nome || i.descricao,
-          quantidade: Number(i.quantidade) || 0,
-          preco_unitario: Number(i.preco_unitario) || 0,
-          unidade: i.unidade,
-          preco_catalogo: i.preco_catalogo,
-          embalagem_id: i.embalagem_id || null,
-          origem_assistente: i.origem_assistente || false,
-          assistente_execucao_id: i.assistente_execucao_id || null,
-        }))
-      };
+      const payload = buildOrcamentoPayload(statusOverride);
 
       let res;
       if (currentId) {
@@ -987,6 +1007,12 @@ function OrcamentoModal({
         res = await api.post('/servicos/orcamentos', payload);
         setCurrentId(res.data.id);
       }
+      
+      if (res && res.data) {
+        if (res.data.subtotal !== undefined && res.data.subtotal !== null) setSubtotalBackend(Number(res.data.subtotal));
+        if (res.data.valor_total !== undefined && res.data.valor_total !== null) setValorTotalBackend(Number(res.data.valor_total));
+      }
+
       try {
         if (onSaveSuccess) {
           onSaveSuccess(res.data, targetStatus === 'aprovado');
@@ -1018,50 +1044,18 @@ function OrcamentoModal({
 
     try {
       setAutoSaving(true);
-      const contactParts = [];
-      if (clienteTelefone.trim()) contactParts.push(clienteTelefone.trim());
-      if (clienteEmail.trim()) contactParts.push(clienteEmail.trim());
-      const combinedContato = contactParts.join(' • ');
+      const payload = buildOrcamentoPayload();
 
-      const payload = {
-        obra_id: obraId || null,
-        cliente_nome: clienteNome.trim() || 'Rascunho de Orçamento',
-        cliente_contato: combinedContato || null,
-        cliente_telefone: clienteTelefone.trim() || null,
-        cliente_email: clienteEmail.trim() || null,
-        cliente_endereco: clienteEndereco.trim() || null,
-        prazo_dias: prazoDias,
-        prazo_garantia: prazoGarantia,
-        objetivo: objetivoCustom.trim() || null,
-        validade_dias: validadeDias,
-        status: status,
-        observacoes: observacoes.trim() || null,
-        notas: notas.trim() || null,
-        margem_bdi_percentual: margemBdiPercentual,
-        impostos_percentual: impostosPercentual,
-        condicao_pagamento: condicoesPagamentoCustom.trim() || null,
-        modo_exibicao: modoExibicao,
-        fornecimento_materiais: fornecimentoMateriais,
-        itens: itens.map(i => ({
-          servico_id: i.servico_id || null,
-          material_id: i.material_id || null,
-          tipo: i.tipo,
-          descricao: i.servico_nome || i.descricao,
-          quantidade: Number(i.quantidade) || 0,
-          preco_unitario: Number(i.preco_unitario) || 0,
-          fornecido_por: i.fornecido_por || 'Edifica',
-          unidade: i.unidade,
-          preco_catalogo: i.preco_catalogo,
-          embalagem_id: i.embalagem_id || null,
-          origem_assistente: i.origem_assistente || false,
-          assistente_execucao_id: i.assistente_execucao_id || null,
-        }))
-      };
-
+      let res;
       if (currentId) {
-        await api.put(`/servicos/orcamentos/${currentId}`, payload);
+        res = await api.put(`/servicos/orcamentos/${currentId}`, payload);
       } else {
-        await api.post('/servicos/orcamentos', payload);
+        res = await api.post('/servicos/orcamentos', payload);
+      }
+      
+      if (res && res.data) {
+        if (res.data.subtotal !== undefined && res.data.subtotal !== null) setSubtotalBackend(Number(res.data.subtotal));
+        if (res.data.valor_total !== undefined && res.data.valor_total !== null) setValorTotalBackend(Number(res.data.valor_total));
       }
       
       if (onSaveSuccess) onSaveSuccess(null, false);
@@ -1081,41 +1075,19 @@ function OrcamentoModal({
     const timer = setTimeout(async () => {
       setAutoSaving(true);
       try {
-        const contactParts = [];
-        if (clienteTelefone.trim()) contactParts.push(clienteTelefone.trim());
-        if (clienteEmail.trim()) contactParts.push(clienteEmail.trim());
-        const combinedContato = contactParts.join(' • ');
+        const payload = buildOrcamentoPayload();
 
-        const payload = {
-          obra_id: obraId || null,
-          cliente_nome: clienteNome.trim() || 'Rascunho de Orçamento',
-          cliente_contato: combinedContato || null,
-          cliente_telefone: clienteTelefone.trim() || null,
-          cliente_email: clienteEmail.trim() || null,
-          cliente_endereco: clienteEndereco.trim() || null,
-          prazo_dias: prazoDias,
-          prazo_garantia: prazoGarantia,
-          objetivo: objetivoCustom.trim() || null,
-          validade_dias: validadeDias,
-          status: status,
-          observacoes: observacoes.trim() || null,
-          notas: notas.trim() || null,
-          condicao_pagamento: condicoesPagamentoCustom.trim() || null,
-          modo_exibicao: modoExibicao,
-          itens: itens.map(i => ({
-            servico_id: i.servico_id || null,
-            descricao: i.servico_nome,
-            quantidade: i.quantidade,
-            preco_unitario: i.preco_unitario,
-            desconto_percentual: i.desconto_percentual,
-          }))
-        };
-
+        let res;
         if (currentId) {
-          await api.put(`/servicos/orcamentos/${currentId}`, payload);
+          res = await api.put(`/servicos/orcamentos/${currentId}`, payload);
         } else {
-          const res = await api.post('/servicos/orcamentos', payload);
+          res = await api.post('/servicos/orcamentos', payload);
           setCurrentId(res.data.id);
+        }
+        
+        if (res && res.data) {
+          if (res.data.subtotal !== undefined && res.data.subtotal !== null) setSubtotalBackend(Number(res.data.subtotal));
+          if (res.data.valor_total !== undefined && res.data.valor_total !== null) setValorTotalBackend(Number(res.data.valor_total));
         }
       } catch (err) {
         console.warn('Erro no autosave', err);

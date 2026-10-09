@@ -14,6 +14,7 @@ class VisitaBase(BaseModel):
     observacao: Optional[str] = None
     data_visita: date
     data_retorno: Optional[date] = None
+    retorno_realizado: bool = False
     visitado_por: Optional[UUID] = None
     foto_url: Optional[str] = None
 
@@ -31,6 +32,7 @@ class VisitaUpdate(BaseModel):
     observacao: Optional[str] = None
     data_visita: Optional[date] = None
     data_retorno: Optional[date] = None
+    retorno_realizado: Optional[bool] = None
     visitado_por: Optional[UUID] = None
     foto_url: Optional[str] = None
 

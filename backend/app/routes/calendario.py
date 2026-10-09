@@ -18,6 +18,24 @@ logger = logging.getLogger("edifica.calendario")
 
 router = APIRouter(prefix="/calendario", tags=["Calendário e Equipe"])
 
+DEFAULT_PROFISSOES = [
+    "Mestre de Obras",
+    "Encarregado de Obras",
+    "Pedreiro",
+    "Servente / Ajudante de Obras",
+    "Eletricista",
+    "Encanador / Bombeiro Hidráulico",
+    "Gesseiro / Montador de Drywall",
+    "Pintor",
+    "Azulejista / Revestidor",
+    "Carpinteiro / Armador",
+    "Telhadista / Calheiro",
+    "Impermeabilizador",
+    "Serralheiro",
+    "Marceneiro",
+    "Soldador"
+]
+
 # ========================================================
 # CRUD: CATÁLOGO DE PROFISSÕES
 # ========================================================
@@ -31,6 +49,17 @@ async def list_profissoes(user: dict = Depends(get_current_user)):
     try:
         res = supabase.table("profissoes").select("*, funcionario_profissoes(funcionario_id)").order("nome").execute()
         profissoes = res.data or []
+        
+        # Se a tabela estiver vazia, auto-popula com as profissões padrão da construção civil
+        if not profissoes:
+            try:
+                seed_data = [{"nome": nome} for nome in DEFAULT_PROFISSOES]
+                supabase.table("profissoes").insert(seed_data).execute()
+                res = supabase.table("profissoes").select("*, funcionario_profissoes(funcionario_id)").order("nome").execute()
+                profissoes = res.data or []
+            except Exception as e_seed:
+                logger.warning(f"Aviso ao auto-popular profissões padrão: {e_seed}")
+
         for p in profissoes:
             fps = p.get("funcionario_profissoes") or []
             p["total_funcionarios"] = len(fps)
@@ -521,31 +550,12 @@ async def create_pagamento(pag: PagamentoFuncionarioBase, user: dict = Depends(g
     data["data_pagamento"] = str(data["data_pagamento"])
     
     res = supabase.table("pagamentos_funcionarios").insert(data).execute()
-    
-    # Injeta no fluxo de caixa
-    if res.data:
-        caixa_data = {
-            "obra_id": data["obra_id"],
-            "tipo": "despesa",
-            "categoria": "Mão de Obra Própria",
-            "descricao": f"Pagamento Funcionário: {data.get('funcionario_id')}",
-            "valor": data["valor_pago"],
-            "data_registro": data["data_pagamento"],
-            "status": "realizado",
-            "metodo_pagamento": "Transferência",
-            "referencia_id": res.data[0]["id"]
-        }
-        if not user.get("is_mock"):
-            caixa_data["created_by"] = user.get("id")
-        supabase.table("caixa_pequeno").insert(caixa_data).execute()
         
     return res.data[0] if res.data else {}
 
 @router.delete("/pagamentos/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_pagamento(id: UUID, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
-    # Primeiro deleta do caixa pequeno
-    supabase.table("caixa_pequeno").delete().eq("referencia_id", str(id)).execute()
     supabase.table("pagamentos_funcionarios").delete().eq("id", str(id)).execute()
     return None
 
@@ -693,12 +703,18 @@ async def get_fechamento_semanal(
                 faltas_por_func[fid] = []
             faltas_por_func[fid].append(f["data"])
 
-        # Busca pagamentos já realizados para calcular saldo em valor fechado
-        pags_res = supabase.table("pagamentos_funcionarios").select("funcionario_id, obra_id, valor_pago").execute()
+        # Busca pagamentos já realizados para calcular saldo
+        pags_res = supabase.table("pagamentos_funcionarios").select("funcionario_id, obra_id, valor_pago, data_pagamento").execute()
         pags_totais = {}
+        pags_semana = {}
         for p in pags_res.data or []:
             key = f"{p['funcionario_id']}_{p['obra_id']}"
-            pags_totais[key] = pags_totais.get(key, 0.0) + float(p.get("valor_pago") or 0.0)
+            val = float(p.get("valor_pago") or 0.0)
+            pags_totais[key] = pags_totais.get(key, 0.0) + val
+            
+            p_data = p.get("data_pagamento")
+            if p_data and d_ini_str <= p_data <= d_fim_str:
+                pags_semana[key] = pags_semana.get(key, 0.0) + val
 
         resumo = []
         import datetime as dt
@@ -734,31 +750,35 @@ async def get_fechamento_semanal(
             valor_fechado_total = float(a.get("valor_fechado") or 0.0)
             
             pago_total = pags_totais.get(f"{fid}_{oid}", 0.0)
+            pago_semana = pags_semana.get(f"{fid}_{oid}", 0.0)
+            
             saldo_restante = max(0.0, valor_fechado_total - pago_total) if modalidade == "fechado" else 0.0
 
             if modalidade == "diaria":
-                valor_sugerido = round(dias_trabalhados * valor_diaria, 2)
+                bruto = dias_trabalhados * valor_diaria
+                valor_sugerido = round(max(0.0, bruto - pago_semana), 2)
             else:
                 valor_sugerido = round(saldo_restante, 2)
 
-            resumo.append({
-                "alocacao_id": a["id"],
-                "funcionario_id": fid,
-                "funcionario_nome": func.get("nome", "Desconhecido"),
-                "funcionario_cargo": func.get("cargo", ""),
-                "obra_id": oid,
-                "obra_nome": obra.get("nome", "Obra"),
-                "modalidade": modalidade,
-                "periodo": a.get("periodo", "dia_inteiro"),
-                "valor_diaria": valor_diaria,
-                "valor_fechado_total": valor_fechado_total,
-                "total_pago": pago_total,
-                "saldo_restante": saldo_restante,
-                "dias_escalados": dias_escalados,
-                "dias_faltas": dias_faltas,
-                "dias_trabalhados": dias_trabalhados,
-                "valor_sugerido": valor_sugerido
-            })
+            if valor_sugerido > 0:
+                resumo.append({
+                    "alocacao_id": a["id"],
+                    "funcionario_id": fid,
+                    "funcionario_nome": func.get("nome", "Desconhecido"),
+                    "funcionario_cargo": func.get("cargo", ""),
+                    "obra_id": oid,
+                    "obra_nome": obra.get("nome", "Obra"),
+                    "modalidade": modalidade,
+                    "periodo": a.get("periodo", "dia_inteiro"),
+                    "valor_diaria": valor_diaria,
+                    "valor_fechado_total": valor_fechado_total,
+                    "total_pago": pago_total,
+                    "saldo_restante": saldo_restante,
+                    "dias_escalados": dias_escalados,
+                    "dias_faltas": dias_faltas,
+                    "dias_trabalhados": dias_trabalhados,
+                    "valor_sugerido": valor_sugerido
+                })
 
         return resumo
     except Exception as e:

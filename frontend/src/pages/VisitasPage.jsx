@@ -59,6 +59,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
     observacao: '',
     data_visita: getTodayDateStr(),
     data_retorno: '',
+    retorno_realizado: false,
     visitado_por: user?.id || '',
     foto_url: ''
   };
@@ -154,6 +155,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
       observacao: visita.observacao || '',
       data_visita: visita.data_visita ? visita.data_visita.split('T')[0] : getTodayDateStr(),
       data_retorno: visita.data_retorno ? visita.data_retorno.split('T')[0] : '',
+      retorno_realizado: visita.retorno_realizado || false,
       visitado_por: visita.visitado_por || user?.id || '',
       foto_url: visita.foto_url || ''
     });
@@ -192,7 +194,10 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
         contato: formData.telefone // sincroniza campo antigo
       };
 
-      if (!payload.data_retorno) delete payload.data_retorno;
+      if (!payload.data_retorno) {
+        payload.data_retorno = null;
+        payload.retorno_realizado = false;
+      }
       if (!editingVisita) {
         payload.visitado_por = user?.id || null;
       }
@@ -270,7 +275,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
   hojeDate.setHours(0, 0, 0, 0);
 
   const retornosPendentes = visitas.filter(v => {
-    if (!v.data_retorno) return false;
+    if (!v.data_retorno || v.retorno_realizado) return false;
     const rDate = new Date(v.data_retorno + 'T12:00:00');
     return rDate <= new Date(); // hoje ou atrasado
   });
@@ -279,7 +284,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
   const filteredVisitas = visitas.filter(v => {
     // Filtro por Aba de Retornos
     if (abaAtiva === 'retornos') {
-      if (!v.data_retorno) return false;
+      if (!v.data_retorno || v.retorno_realizado) return false;
     }
 
     // Filtro por Sócio
@@ -711,7 +716,9 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
                   {temRetorno && (
                     <div className="mt-3">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold ${
-                        retornoAtrasado
+                        v.retorno_realizado
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : retornoAtrasado
                           ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                           : retornoHoje
                           ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
@@ -719,8 +726,7 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
                       }`}>
                         <Clock className="w-3 h-3" />
                         Retorno: {new Date(v.data_retorno + 'T12:00:00').toLocaleDateString('pt-BR')}
-                        {retornoHoje && ' (Hoje!)'}
-                        {retornoAtrasado && ' (Atrasado)'}
+                        {v.retorno_realizado ? ' (Realizado)' : (retornoHoje ? ' (Hoje!)' : (retornoAtrasado ? ' (Atrasado)' : ''))}
                       </span>
                     </div>
                   )}
@@ -936,9 +942,20 @@ export default function VisitasPage({ user, onCreateOrcamento }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Data de Retorno (Follow-up)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Data de Retorno (Follow-up)
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.retorno_realizado}
+                        onChange={e => setFormData({ ...formData, retorno_realizado: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      Retorno realizado
+                    </label>
+                  </div>
                   <input 
                     type="date" 
                     value={formData.data_retorno} 

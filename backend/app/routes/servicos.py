@@ -263,6 +263,24 @@ async def get_orcamento(orcamento_id: str, user: dict = Depends(get_current_user
     raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
 
 
+def calcular_totais_orcamento(itens: List[dict], bdi: float, impostos: float, fornecimento_materiais: str) -> tuple[float, float]:
+    subtotal = 0.0
+    for item in itens:
+        preco = float(item.get("preco_unitario") or 0.0)
+        qtd = float(item.get("quantidade") or 0.0)
+        if item.get("fornecido_por") == "Cliente" or (item.get("tipo") == "insumo" and fornecimento_materiais == "cliente"):
+            sub_liquido = 0.0
+        else:
+            sub_liquido = preco * qtd
+        subtotal += sub_liquido
+        item["subtotal"] = round(sub_liquido, 2)
+
+    total_liquido = subtotal
+    fator = 1 + ((bdi + impostos) / 100.0)
+    valor_total = round(total_liquido * fator, 2)
+    return round(subtotal, 2), valor_total
+
+
 @router.post("/orcamentos", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_current_user)):
     """Cria e persiste um novo orçamento com seus itens."""
@@ -305,13 +323,6 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
                     except Exception:
                         pass
 
-        if item.fornecido_por == "Cliente" or (item.tipo == "insumo" and getattr(orcamento, 'fornecimento_materiais', 'edifica') == 'cliente'):
-            sub_liquido = 0.0
-        else:
-            sub_liquido = preco_unit * item.quantidade
-
-        subtotal_geral += sub_liquido
-
         itens_processados.append({
             "id": f"item-{uuid4().hex[:8]}",
             "orcamento_id": orc_id,
@@ -327,12 +338,15 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             "descricao": descricao,
             "quantidade": item.quantidade,
             "preco_unitario": preco_unit,
-            "subtotal": round(sub_liquido, 2)
         })
 
-    total_liquido = subtotal_geral
-    fator_acrescimo = 1 + ((orcamento.margem_bdi_percentual + orcamento.impostos_percentual) / 100)
-    valor_total = round(total_liquido * fator_acrescimo, 2)
+    fornecimento = getattr(orcamento, 'fornecimento_materiais', 'edifica')
+    subtotal_geral, valor_total = calcular_totais_orcamento(
+        itens_processados, 
+        orcamento.margem_bdi_percentual, 
+        orcamento.impostos_percentual, 
+        fornecimento
+    )
 
     orcamento_dict = {
         "id": orc_id,
@@ -346,7 +360,7 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
         "prazo_dias": orcamento.prazo_dias,
         "prazo_garantia": orcamento.prazo_garantia,
         "objetivo": orcamento.objetivo,
-        "subtotal": round(subtotal_geral, 2),
+        "subtotal": subtotal_geral,
         "valor_total": valor_total,
         "validade_dias": orcamento.validade_dias,
         "status": orcamento.status,
@@ -399,8 +413,26 @@ async def update_orcamento(
     supabase = get_supabase_client()
     now_iso = datetime.utcnow().isoformat()
 
-    # Recalcula
-    subtotal_geral = 0.0
+    # Busca orcamento atual para verificar congelamento e preencher dados ausentes
+    curr_orc = None
+    if supabase:
+        res = supabase.table("orcamentos").select("status, margem_bdi_percentual, impostos_percentual, fornecimento_materiais").eq("id", str(orcamento_id)).execute()
+        if res.data:
+            curr_orc = res.data[0]
+            
+    if curr_orc and curr_orc.get("status") == "aprovado":
+        if orcamento.status != "rascunho" and orcamento.status != "enviado":
+            # O backend recusa a alteração desses campos ignorando-os na requisição
+            orcamento.itens = None
+            orcamento.margem_bdi_percentual = None
+            orcamento.impostos_percentual = None
+            orcamento.fornecimento_materiais = None
+
+    # Valores base
+    bdi = orcamento.margem_bdi_percentual if orcamento.margem_bdi_percentual is not None else (curr_orc.get("margem_bdi_percentual", 0.0) if curr_orc else 0.0)
+    imp = orcamento.impostos_percentual if orcamento.impostos_percentual is not None else (curr_orc.get("impostos_percentual", 0.0) if curr_orc else 0.0)
+    forn = getattr(orcamento, 'fornecimento_materiais', None) or (curr_orc.get("fornecimento_materiais", "edifica") if curr_orc else "edifica")
+
     itens_processados = []
 
     if orcamento.itens is not None:
@@ -408,13 +440,6 @@ async def update_orcamento(
             preco_unit = item.preco_unitario or 0.0
             descricao = item.descricao or "Item"
             
-            if item.fornecido_por == "Cliente" or (item.tipo == "insumo" and getattr(orcamento, 'fornecimento_materiais', 'edifica') == 'cliente'):
-                sub_liquido = 0.0
-            else:
-                sub_liquido = preco_unit * item.quantidade
-
-            subtotal_geral += sub_liquido
-
             itens_processados.append({
                 "id": item.id if hasattr(item, "id") and item.id else f"item-{uuid4().hex[:8]}",
                 "orcamento_id": orcamento_id,
@@ -430,14 +455,23 @@ async def update_orcamento(
                 "descricao": descricao,
                 "quantidade": item.quantidade,
                 "preco_unitario": preco_unit,
-                "subtotal": round(sub_liquido, 2)
             })
-
-    total_liquido = subtotal_geral
-    bdi = orcamento.margem_bdi_percentual if orcamento.margem_bdi_percentual is not None else 0.0
-    imp = orcamento.impostos_percentual if orcamento.impostos_percentual is not None else 0.0
-    fator_acrescimo = 1 + ((bdi + imp) / 100)
-    valor_total = round(total_liquido * fator_acrescimo, 2)
+            
+        subtotal_geral, valor_total = calcular_totais_orcamento(itens_processados, bdi, imp, forn)
+    else:
+        # Se não enviou itens, mas mudou BDI/Impostos, precisa recalcular os itens atuais do BD?
+        # Para isso, precisamos buscar os itens.
+        if orcamento.margem_bdi_percentual is not None or orcamento.impostos_percentual is not None or getattr(orcamento, 'fornecimento_materiais', None) is not None:
+            if supabase:
+                it_res = supabase.table("orcamento_itens").select("*").eq("orcamento_id", str(orcamento_id)).execute()
+                itens_bd = it_res.data or []
+                subtotal_geral, valor_total = calcular_totais_orcamento(itens_bd, bdi, imp, forn)
+            else:
+                subtotal_geral = 0.0
+                valor_total = 0.0
+        else:
+            subtotal_geral = None
+            valor_total = None
 
     update_dict = {
         "updated_at": now_iso
@@ -451,8 +485,8 @@ async def update_orcamento(
         if getattr(orcamento, key) is not None:
             update_dict[key] = str(getattr(orcamento, key)) if key == "obra_id" else getattr(orcamento, key)
 
-    if orcamento.itens is not None:
-        update_dict["subtotal"] = round(subtotal_geral, 2)
+    if subtotal_geral is not None:
+        update_dict["subtotal"] = subtotal_geral
         update_dict["valor_total"] = valor_total
 
     if supabase:

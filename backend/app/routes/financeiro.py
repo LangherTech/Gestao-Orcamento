@@ -18,24 +18,28 @@ async def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(
     query_receitas = supabase.table("receitas").select("valor, status")
     query_caixa_pequeno = supabase.table("caixa_pequeno").select("valor, status")
     query_obras = supabase.table("obras").select("valor_aprovado")
+    query_funcionarios = supabase.table("pagamentos_funcionarios").select("valor_pago")
     
     if obra_id:
         query_receitas = query_receitas.eq("obra_id", str(obra_id))
         query_caixa_pequeno = query_caixa_pequeno.eq("obra_id", str(obra_id))
         query_obras = query_obras.eq("id", str(obra_id))
+        query_funcionarios = query_funcionarios.eq("obra_id", str(obra_id))
 
     receitas_res = query_receitas.execute()
     caixa_res = query_caixa_pequeno.execute()
     obras_res = query_obras.execute()
+    funcionarios_res = query_funcionarios.execute()
     
     receita_recebida = sum(r["valor"] for r in receitas_res.data if r["status"] == "recebido")
     receita_prevista = sum(o["valor_aprovado"] or 0 for o in obras_res.data) if obras_res.data else 0
     despesa_caixa_pequeno = sum(c["valor"] for c in caixa_res.data if c["status"] == "aprovado")
+    despesa_funcionarios = sum(f["valor_pago"] for f in funcionarios_res.data)
     
     # Mock some data for components not yet implemented (compras, empreiteiros)
     despesa_compras = 0
     despesa_empreiteiros = 0
-    despesa_total = despesa_caixa_pequeno + despesa_compras + despesa_empreiteiros
+    despesa_total = despesa_caixa_pequeno + despesa_compras + despesa_empreiteiros + despesa_funcionarios
     saldo_operacional = receita_recebida - despesa_total
     
     margem_atual_pct = 0
@@ -49,6 +53,7 @@ async def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(
         "despesa_compras": despesa_compras,
         "despesa_empreiteiros": despesa_empreiteiros,
         "despesa_caixa_pequeno": despesa_caixa_pequeno,
+        "despesa_funcionarios": despesa_funcionarios,
         "despesa_total": despesa_total,
         "saldo_operacional": saldo_operacional,
         "margem_atual_pct": round(margem_atual_pct, 2)

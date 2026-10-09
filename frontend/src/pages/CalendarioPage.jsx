@@ -440,11 +440,17 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
         ...pagamentoForm,
         valor_pago: parseFloat(pagamentoForm.valor_pago) || 0
       };
+      if (!payload.alocacao_id) {
+        payload.alocacao_id = null;
+      }
       await api.post('/calendario/pagamentos', payload);
       showToast('Pagamento registrado com sucesso!');
       setShowModal(false);
       setPagamentoForm(initialPagamentoForm);
-      fetchData();
+      
+      api.get('/calendario/pagamentos').then(res => {
+        if(res.data) setPagamentos(res.data);
+      });
     } catch (err) {
       console.error('Erro ao salvar pagamento:', err);
       let detail = err?.response?.data?.detail;
@@ -471,7 +477,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
     try {
       await api.delete(`/calendario/pagamentos/${id}`);
       showToast('Pagamento removido com sucesso.');
-      fetchData();
+      setPagamentos(prev => prev.filter(p => p.id !== id));
     } catch (err) {
       showToast('Erro ao excluir pagamento.', 'error');
     }
@@ -653,7 +659,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
       </div>
 
       {/* KPIs / Cards de Resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>Total Colaboradores</span>
@@ -662,17 +668,6 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
           <div>
             <span className="text-2xl font-bold text-white tracking-tight">{stats.totalFuncionarios}</span>
             <span className="text-xs text-slate-400 block mt-0.5">{stats.funcionariosAtivos} ativos no quadro</span>
-          </div>
-        </div>
-
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
-            <span>Catálogo Profissões</span>
-            <GraduationCap className="w-4 h-4 text-amber-400" />
-          </div>
-          <div>
-            <span className="text-2xl font-bold text-amber-400 tracking-tight">{stats.totalProfissoes}</span>
-            <span className="text-xs text-slate-400 block mt-0.5">cargos padronizados</span>
           </div>
         </div>
 
@@ -698,7 +693,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between col-span-2 md:col-span-1">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>Obras com Equipe</span>
             <Building2 className="w-4 h-4 text-purple-400" />
@@ -2389,8 +2384,8 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
               </button>
             </div>
 
-            <div className="p-6">
-              <form id="pagamento-form" onSubmit={handleSavePagamento} className="space-y-4">
+            <form id="pagamento-form" onSubmit={handleSavePagamento} className="flex flex-col">
+              <div className="p-6 space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Funcionário *</label>
                   <select
@@ -2451,6 +2446,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                   <input
                     type="number"
                     required
+                    step="0.01"
                     placeholder="Ex: 850.00"
                     value={pagamentoForm.valor_pago}
                     onChange={e => setPagamentoForm({...pagamentoForm, valor_pago: e.target.value})}
@@ -2458,25 +2454,24 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                   />
                   <p className="text-[10px] text-slate-500 mt-1">Este valor será lançado automaticamente como despesa de Mão de Obra Própria no Caixa Pequeno da obra selecionada.</p>
                 </div>
-              </form>
-            </div>
+              </div>
 
-            <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                form="pagamento-form"
-                className="px-5 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-all"
-              >
-                Lançar Pagamento
-              </button>
-            </div>
+              <div className="p-4 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/30">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-all"
+                >
+                  Lançar Pagamento
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
