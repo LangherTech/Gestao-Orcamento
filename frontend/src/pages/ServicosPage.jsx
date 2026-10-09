@@ -1059,8 +1059,14 @@ function OrcamentoModal({
   };
 
   const handleClose = async () => {
-    // Se não preencheu nada, fecha direto
-    if (!clienteNome && itens.length === 0 && !notas && !observacoes) {
+    // Se for um novo orçamento sem itens adicionados, descarta e fecha direto sem criar registro vazio no banco
+    if (!currentId && itens.length === 0) {
+      onClose();
+      return;
+    }
+
+    // Se não preencheu nome e nem itens, fecha direto
+    if (!clienteNome?.trim() && itens.length === 0) {
       onClose();
       return;
     }
@@ -1072,17 +1078,15 @@ function OrcamentoModal({
       let res;
       if (currentId) {
         res = await api.put(`/servicos/orcamentos/${currentId}`, payload);
-      } else {
+      } else if (itens.length > 0) {
         res = await api.post('/servicos/orcamentos', payload);
       }
       
       if (res && res.data) {
         if (res.data.subtotal !== undefined && res.data.subtotal !== null) setSubtotalBackend(Number(res.data.subtotal));
         if (res.data.valor_total !== undefined && res.data.valor_total !== null) setValorTotalBackend(Number(res.data.valor_total));
+        if (onSaveSuccess) onSaveSuccess(res.data, false, false);
       }
-      
-      if (onSaveSuccess) onSaveSuccess(null, false);
-      
     } catch (err) {
       console.warn('Erro ao salvar rascunho no fechamento', err);
     } finally {
@@ -1093,7 +1097,9 @@ function OrcamentoModal({
 
   useEffect(() => {
     if (step !== 1 || readOnlyView) return;
-    if (!clienteNome && itens.length === 0 && !notas && !observacoes) return;
+    // Não executa autosave em novo orçamento se ainda não possuir itens
+    if (!currentId && itens.length === 0) return;
+    if (!clienteNome?.trim() && itens.length === 0 && !notas?.trim() && !observacoes?.trim()) return;
 
     const timer = setTimeout(async () => {
       setAutoSaving(true);
@@ -1103,9 +1109,12 @@ function OrcamentoModal({
         let res;
         if (currentId) {
           res = await api.put(`/servicos/orcamentos/${currentId}`, payload);
-        } else {
+        } else if (itens.length > 0) {
           res = await api.post('/servicos/orcamentos', payload);
-          setCurrentId(res.data.id);
+          if (res?.data?.id) {
+            setCurrentId(res.data.id);
+            if (onSaveSuccess) onSaveSuccess(res.data, false, false);
+          }
         }
         
         if (res && res.data) {
@@ -2035,13 +2044,14 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
 
   // Stats de Orçamentos
   const orcamentoStats = useMemo(() => {
-    const total = orcamentos.length;
-    const volumeTotal = orcamentos.reduce((acc, o) => acc + (Number(o.valor_total) || 0), 0);
-    const aprovados = orcamentos.filter(o => o.status === 'aprovado');
-    const valorAprovado = aprovados.reduce((acc, o) => acc + (Number(o.valor_total) || 0), 0);
+    const list = (orcamentos || []).filter(Boolean);
+    const total = list.length;
+    const volumeTotal = list.reduce((acc, o) => acc + (Number(o?.valor_total) || 0), 0);
+    const aprovados = list.filter(o => o?.status === 'aprovado');
+    const valorAprovado = aprovados.reduce((acc, o) => acc + (Number(o?.valor_total) || 0), 0);
     const taxaConversao = total > 0 ? (aprovados.length / total) * 100 : 0;
-    const emNegociacao = orcamentos.filter(o => o.status === 'enviado' || o.status === 'rascunho');
-    const valorEmNegociacao = emNegociacao.reduce((acc, o) => acc + (Number(o.valor_total) || 0), 0);
+    const emNegociacao = list.filter(o => o?.status === 'enviado' || o?.status === 'rascunho');
+    const valorEmNegociacao = emNegociacao.reduce((acc, o) => acc + (Number(o?.valor_total) || 0), 0);
 
     return {
       total,
@@ -2107,7 +2117,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
 
   // Filtrar orçamentos
   const filteredOrcamentos = useMemo(() => {
-    return orcamentos.filter(o => {
+    return (orcamentos || []).filter(Boolean).filter(o => {
       const matchSearch = !orcamentoSearch ||
         o.cliente_nome?.toLowerCase().includes(orcamentoSearch.toLowerCase()) ||
         o.numero?.toLowerCase().includes(orcamentoSearch.toLowerCase()) ||
@@ -2393,20 +2403,27 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     }
   };
 
-  const handleOrcamentoSaved = (savedOrc, isApproved) => {
+  const handleOrcamentoSaved = (savedOrc, isApproved, showToast = true) => {
+    if (!savedOrc || !savedOrc.id) {
+      fetchData();
+      return;
+    }
     setOrcamentos(prev => {
-      const exists = prev.find(o => o.id === savedOrc.id);
+      const cleanPrev = (prev || []).filter(Boolean);
+      const exists = cleanPrev.find(o => o?.id === savedOrc.id);
       if (exists) {
-        return prev.map(o => o.id === savedOrc.id ? savedOrc : o);
+        return cleanPrev.map(o => o?.id === savedOrc.id ? savedOrc : o);
       }
-      return [savedOrc, ...prev];
+      return [savedOrc, ...cleanPrev];
     });
-    setToast({
-      message: isApproved
-        ? 'Orçamento salvo e Aprovado com sucesso! Obra atualizada.'
-        : 'Orçamento salvo e registrado com sucesso!',
-      type: 'success'
-    });
+    if (showToast) {
+      setToast({
+        message: isApproved
+          ? 'Orçamento salvo e Aprovado com sucesso! Obra atualizada.'
+          : 'Orçamento salvo e registrado com sucesso!',
+        type: 'success'
+      });
+    }
   };
 
   const allCategorias = useMemo(() => {

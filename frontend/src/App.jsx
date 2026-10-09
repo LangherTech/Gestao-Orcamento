@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import api from './services/api';
 import { supabase } from './services/supabase';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy loading the pages for better performance (Code Splitting)
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -213,49 +214,51 @@ export default function App() {
         {/* Corpo da Página */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
-            <Suspense fallback={
-              <div className="flex items-center justify-center h-full pt-20 text-emerald-500">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
-              </div>
-            }>
-              {activeTab === 'dashboard' && (
-                <DashboardPage 
-                  selectedObra={selectedObra} 
-                  kpis={kpis} 
-                  lucratividadeObras={lucratividadeObras}
-                  orcadoVsRealizado={orcadoVsRealizado} 
-                />
-              )}
-              {activeTab === 'obras' && (
-                <ObrasPage 
-                  obras={obras} 
-                  onRefresh={fetchData}
-                  onSelectObra={(id) => {
-                    setSelectedObraId(id);
-                    setActiveTab('dashboard');
-                  }} 
-                />
-              )}
-              {activeTab === 'servicos' && (
-                <ServicosPage 
-                  initialOrcamentoData={pendingOrcamentoData}
-                  onClearInitialOrcamentoData={() => setPendingOrcamentoData(null)}
-                  user={session?.user}
-                />
-              )}
-              {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} user={session?.user} />}
-              {activeTab === 'rdo' && <RDOPage selectedObraId={selectedObraId} user={session?.user} />}
-              {activeTab === 'compras' && <ComprasPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
-              {activeTab === 'gestao' && <GestaoPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
-              {activeTab === 'calendario' && <CalendarioPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
-              {activeTab === 'visitas' && (
-                <VisitasPage 
-                  user={session?.user} 
-                  onCreateOrcamento={handleCreateOrcamentoFromVisita} 
-                />
-              )}
-              {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
-            </Suspense>
+            <ErrorBoundary key={activeTab}>
+              <Suspense fallback={
+                <div className="flex items-center justify-center h-full pt-20 text-emerald-500">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+                </div>
+              }>
+                {activeTab === 'dashboard' && (
+                  <DashboardPage 
+                    selectedObra={selectedObra} 
+                    kpis={kpis} 
+                    lucratividadeObras={lucratividadeObras}
+                    orcadoVsRealizado={orcadoVsRealizado} 
+                  />
+                )}
+                {activeTab === 'obras' && (
+                  <ObrasPage 
+                    obras={obras} 
+                    onRefresh={fetchData}
+                    onSelectObra={(id) => {
+                      setSelectedObraId(id);
+                      setActiveTab('dashboard');
+                    }} 
+                  />
+                )}
+                {activeTab === 'servicos' && (
+                  <ServicosPage 
+                    initialOrcamentoData={pendingOrcamentoData}
+                    onClearInitialOrcamentoData={() => setPendingOrcamentoData(null)}
+                    user={session?.user}
+                  />
+                )}
+                {activeTab === 'cronograma' && <CronogramaPage selectedObraId={selectedObraId} user={session?.user} />}
+                {activeTab === 'rdo' && <RDOPage selectedObraId={selectedObraId} user={session?.user} />}
+                {activeTab === 'compras' && <ComprasPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+                {activeTab === 'gestao' && <GestaoPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+                {activeTab === 'calendario' && <CalendarioPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+                {activeTab === 'visitas' && (
+                  <VisitasPage 
+                    user={session?.user} 
+                    onCreateOrcamento={handleCreateOrcamentoFromVisita} 
+                  />
+                )}
+                {activeTab === 'financeiro' && <FinanceiroPage selectedObraId={selectedObraId} obras={obras} user={session?.user} />}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>
