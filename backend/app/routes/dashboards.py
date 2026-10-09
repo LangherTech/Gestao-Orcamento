@@ -193,7 +193,7 @@ async def get_orcado_vs_realizado(obra_id: Optional[UUID] = Query(None), user: d
 
     def calc_pct(real, orc):
         if orc <= 0:
-            return 0.0
+            return 100.0 if real > 0 else 0.0
         return round((real / orc) * 100, 1)
 
     return [
