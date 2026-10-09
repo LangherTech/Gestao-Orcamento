@@ -28,7 +28,7 @@ async def list_obras(
     if not supabase:
         return []
 
-    query = supabase.table("obras").select("*, orcamentos(*)")
+    query = supabase.table("obras").select("*")
     termo = (busca or search or "").strip()
 
     # REGRA CRÍTICA DE BUSCA:

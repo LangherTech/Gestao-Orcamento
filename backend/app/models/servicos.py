@@ -63,6 +63,8 @@ class OrcamentoItemInput(BaseModel):
     origem_assistente: Optional[bool] = False
     assistente_execucao_id: Optional[str] = None
     fornecido_por: Optional[str] = Field("Edifica", description="Edifica ou Cliente")
+    custo_unitario: Optional[float] = Field(0.0, ge=0)
+    executor: Optional[str] = Field("Próprio", description="Próprio ou Terceiro")
 
 class OrcamentoItemResponse(BaseModel):
     id: Optional[str] = None
@@ -79,7 +81,11 @@ class OrcamentoItemResponse(BaseModel):
     origem_assistente: Optional[bool] = False
     assistente_execucao_id: Optional[str] = None
     fornecido_por: Optional[str] = "Edifica"
+    custo_unitario: float = 0.0
+    executor: str = "Próprio"
     subtotal: float
+    custo_total: float = 0.0
+    lucro: float = 0.0
 
 class OrcamentoCreate(BaseModel):
     obra_id: Optional[UUID] = None

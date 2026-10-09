@@ -220,7 +220,7 @@ async def list_orcamentos(
     supabase = get_supabase_client()
     if supabase:
         try:
-            query = supabase.table("orcamentos").select("*, orcamento_itens(*)")
+            query = supabase.table("orcamentos").select("*")
             if obra_id:
                 query = query.eq("obra_id", str(obra_id))
             if status:
@@ -274,6 +274,16 @@ def calcular_totais_orcamento(itens: List[dict], bdi: float, impostos: float, fo
             sub_liquido = preco * qtd
         subtotal += sub_liquido
         item["subtotal"] = round(sub_liquido, 2)
+        
+        custo_unit = float(item.get("custo_unitario") or 0.0)
+        # If client provides, maybe there is no cost? Let's assume if sub_liquido is 0 due to client provision, cost is also 0
+        if item.get("fornecido_por") == "Cliente" or (item.get("tipo") == "insumo" and fornecimento_materiais == "cliente"):
+            custo_tot = 0.0
+        else:
+            custo_tot = custo_unit * qtd
+            
+        item["custo_total"] = round(custo_tot, 2)
+        item["lucro"] = round(sub_liquido - custo_tot, 2)
 
     total_liquido = subtotal
     fator = 1 + ((bdi + impostos) / 100.0)
@@ -338,6 +348,8 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             "descricao": descricao,
             "quantidade": item.quantidade,
             "preco_unitario": preco_unit,
+            "custo_unitario": item.custo_unitario or 0.0,
+            "executor": item.executor or "Próprio",
         })
 
     fornecimento = getattr(orcamento, 'fornecimento_materiais', 'edifica')
@@ -382,6 +394,7 @@ async def create_orcamento(orcamento: OrcamentoCreate, user: dict = Depends(get_
             head_data = {k: v for k, v in orcamento_dict.items() if k != "itens"}
             res = supabase.table("orcamentos").insert(head_data).execute()
             if res.data:
+                created_head = res.data[0]
                 itens_to_insert = []
                 for it in itens_processados:
                     it_data = dict(it)
@@ -455,6 +468,8 @@ async def update_orcamento(
                 "descricao": descricao,
                 "quantidade": item.quantidade,
                 "preco_unitario": preco_unit,
+                "custo_unitario": item.custo_unitario or 0.0,
+                "executor": item.executor or "Próprio",
             })
             
         subtotal_geral, valor_total = calcular_totais_orcamento(itens_processados, bdi, imp, forn)

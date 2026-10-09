@@ -731,6 +731,10 @@ function OrcamentoModal({
           preco_unitario: Number(it.preco_unitario) || 0,
           quantidade: Number(it.quantidade) || 1,
           desconto_percentual: Number(it.desconto_percentual) || 0,
+          custo_unitario: Number(it.custo_unitario) || 0,
+          executor: it.executor || 'Próprio',
+          custo_total: Number(it.custo_total) || 0,
+          lucro: Number(it.lucro) || 0,
         }))
       );
       setStep(readOnlyView ? 2 : 1);
@@ -778,7 +782,11 @@ function OrcamentoModal({
       quantidade: 1,
       fornecido_por: 'Edifica',
       materiais: servico.servico_materiais || [],
-      mao_de_obra: servico.mao_de_obra || 0
+      mao_de_obra: servico.mao_de_obra || 0,
+      custo_unitario: servico.mao_de_obra || 0,
+      executor: 'Próprio',
+      custo_total: 0,
+      lucro: 0
     }]);
   };
 
@@ -804,7 +812,11 @@ function OrcamentoModal({
       preco_catalogo: Number(ins.preco_unitario) || 0,
       quantidade: ins.qtd_compra,
       unidade: ins.unidade,
-      fornecido_por: ins.fornecido_por || 'Edifica'
+      fornecido_por: ins.fornecido_por || 'Edifica',
+      custo_unitario: Number(ins.preco_unitario) || 0,
+      executor: 'Próprio',
+      custo_total: 0,
+      lucro: 0
     }));
 
     // 2. Verifica se algum já existe no orçamento
@@ -851,7 +863,11 @@ function OrcamentoModal({
       preco_catalogo: Number(material.preco_medio) || 0,
       unidade: material.unidade || 'Un',
       quantidade: 1,
-      fornecido_por: 'Edifica'
+      fornecido_por: 'Edifica',
+      custo_unitario: Number(material.preco_medio) || 0,
+      executor: 'Próprio',
+      custo_total: 0,
+      lucro: 0
     }]);
   };
 
@@ -908,7 +924,11 @@ function OrcamentoModal({
         fornecido_por: 'Edifica',
         desconto_percentual: 0,
         materiais: s.servico_materiais || [],
-        mao_de_obra: s.mao_de_obra || 0
+        mao_de_obra: s.mao_de_obra || 0,
+        custo_unitario: s.mao_de_obra || 0,
+        executor: 'Próprio',
+        custo_total: 0,
+        lucro: 0
       }));
     if (newItens.length > 0) {
       setItens(prev => [...prev, ...newItens]);
@@ -968,6 +988,8 @@ function OrcamentoModal({
         embalagem_id: i.embalagem_id || null,
         origem_assistente: i.origem_assistente || false,
         assistente_execucao_id: i.assistente_execucao_id || null,
+        custo_unitario: Number(i.custo_unitario) || 0,
+        executor: i.executor || 'Próprio'
       }));
     }
 
@@ -1015,7 +1037,8 @@ function OrcamentoModal({
 
       try {
         if (onSaveSuccess) {
-          onSaveSuccess(res.data, targetStatus === 'aprovado');
+          const tgtStatus = statusOverride || status;
+          onSaveSuccess(res.data, tgtStatus === 'aprovado');
         }
       } catch (cbErr) {
         console.warn('Erro no callback onSaveSuccess:', cbErr);
@@ -1616,29 +1639,65 @@ function OrcamentoModal({
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <div>
-                        <label className="text-[10px] text-slate-500 block uppercase font-semibold">Quantidade</label>
-                        <input
-                          type="number" step="0.01" min="0"
-                          value={item.quantidade}
-                          onChange={(e) => handleUpdateItem(idx, 'quantidade', e.target.value)}
-                          className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-500 block uppercase font-semibold">Valor Unitário</label>
-                        <input
-                          type="number" step="0.01" min="0"
-                          value={item.preco_unitario}
-                          onChange={(e) => handleUpdateItem(idx, 'preco_unitario', e.target.value)}
-                          className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        />
-                      </div>
-                      <div className="text-right min-w-[90px]">
-                        <label className="text-[10px] text-slate-500 block uppercase font-semibold">Subtotal</label>
-                        <span className="text-xs font-bold text-emerald-400">
-                          {formatCurrency((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade))}
-                        </span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Quantidade</label>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={item.quantidade}
+                              onChange={(e) => handleUpdateItem(idx, 'quantidade', e.target.value)}
+                              className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Custo Un.</label>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={item.custo_unitario}
+                              onChange={(e) => handleUpdateItem(idx, 'custo_unitario', e.target.value)}
+                              className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Valor Unitário</label>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={item.preco_unitario}
+                              onChange={(e) => handleUpdateItem(idx, 'preco_unitario', e.target.value)}
+                              className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white text-center focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Executor</label>
+                            <select
+                              value={item.executor}
+                              onChange={(e) => {
+                                const newItens = [...itens];
+                                newItens[idx].executor = e.target.value;
+                                setItens(newItens);
+                              }}
+                              className="w-20 bg-slate-800 border border-slate-700 rounded-lg px-1 py-1 text-[10px] text-white focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
+                            >
+                              <option value="Próprio">Próprio</option>
+                              <option value="Terceiro">Terceiro</option>
+                            </select>
+                          </div>
+                          <div className="text-right min-w-[70px]">
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Lucro (Prev.)</label>
+                            <span className="text-[11px] font-bold text-blue-400">
+                              {formatCurrency(((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade)) - (item.custo_unitario * item.quantidade))}
+                            </span>
+                          </div>
+                          <div className="text-right min-w-[80px]">
+                            <label className="text-[10px] text-slate-500 block uppercase font-semibold">Subtotal</label>
+                            <span className="text-xs font-bold text-emerald-400">
+                              {formatCurrency((fornecimentoMateriais === 'cliente' && item.tipo === 'insumo') ? 0 : (item.preco_unitario * item.quantidade))}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -1655,15 +1714,30 @@ function OrcamentoModal({
 
               {/* Totalizador */}
               <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-6">
+                <div className="flex flex-wrap items-center gap-6">
                   <div>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Subtotal</span>
-                    <span className="text-sm font-semibold text-slate-300">{formatCurrency(subtotalBruto)}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Subtotal Itens</span>
+                    <span className="text-sm font-semibold text-slate-300">
+                      {formatCurrency(itens.reduce((acc, it) => acc + ((fornecimentoMateriais === 'cliente' && it.tipo === 'insumo') ? 0 : (it.preco_unitario * it.quantidade)), 0))}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Custo Previsto (Itens)</span>
+                    <span className="text-sm font-semibold text-orange-400">
+                      {formatCurrency(itens.reduce((acc, it) => acc + (it.custo_unitario * it.quantidade), 0))}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Lucro Previsto (Itens)</span>
+                    <span className="text-sm font-semibold text-blue-400">
+                      {formatCurrency(itens.reduce((acc, it) => acc + (((fornecimentoMateriais === 'cliente' && it.tipo === 'insumo') ? 0 : (it.preco_unitario * it.quantidade)) - (it.custo_unitario * it.quantidade)), 0))}
+                    </span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] uppercase tracking-wider text-emerald-400 block font-bold">Valor Total da Proposta</span>
-                  <span className="text-2xl font-black text-emerald-400">{formatCurrency(valorTotalFinal)}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 block">Total Calculado Anteriormente (BDI/Impostos)</span>
+                  <span className="text-lg font-black text-slate-300">{formatCurrency(valorTotalFinal)}</span>
+                  <span className="text-[9px] text-slate-500 block">Salve para recalcular com BDI/Impostos novos</span>
                 </div>
               </div>
             </div>
@@ -2266,16 +2340,26 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
     setShowOrcamento(true);
   };
 
-  const handleViewOrcamento = (orc) => {
-    setSelectedOrcamento(orc);
-    setReadOnlyViewOrcamento(true);
-    setShowOrcamento(true);
+  const handleViewOrcamento = async (orc) => {
+    try {
+      const res = await api.get(`/servicos/orcamentos/${orc.id}`);
+      setSelectedOrcamento(res.data);
+      setReadOnlyViewOrcamento(true);
+      setShowOrcamento(true);
+    } catch (err) {
+      setToast({ message: 'Erro ao carregar detalhes do orçamento.', type: 'error' });
+    }
   };
 
-  const handleEditOrcamento = (orc) => {
-    setSelectedOrcamento(orc);
-    setReadOnlyViewOrcamento(false);
-    setShowOrcamento(true);
+  const handleEditOrcamento = async (orc) => {
+    try {
+      const res = await api.get(`/servicos/orcamentos/${orc.id}`);
+      setSelectedOrcamento(res.data);
+      setReadOnlyViewOrcamento(false);
+      setShowOrcamento(true);
+    } catch (err) {
+      setToast({ message: 'Erro ao carregar detalhes do orçamento.', type: 'error' });
+    }
   };
 
   const handleUpdateOrcamentoStatus = async (orcId, newStatus) => {
@@ -2310,7 +2394,13 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
   };
 
   const handleOrcamentoSaved = (savedOrc, isApproved) => {
-    fetchData();
+    setOrcamentos(prev => {
+      const exists = prev.find(o => o.id === savedOrc.id);
+      if (exists) {
+        return prev.map(o => o.id === savedOrc.id ? savedOrc : o);
+      }
+      return [savedOrc, ...prev];
+    });
     setToast({
       message: isApproved
         ? 'Orçamento salvo e Aprovado com sucesso! Obra atualizada.'
@@ -2725,7 +2815,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
       )}
 
       {/* ============================================================== */}
-      {/* ABA 2: CATÁLOGO DE SERVIÇOS & INSUMOS (Composição Técnica) */}
+      {/* ABA 2: CATÁLOGO DE SERVIÇOS & MATERIAIS (Composição Técnica) */}
       {/* ============================================================== */}
       {activeSubTab === 'servicos' && (
         <div className="space-y-6">
@@ -2823,7 +2913,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
       )}
 
       {/* ============================================================== */}
-      {/* ABA 3: TABELA DE VALORES (GESTÃO GLOBAL DE INSUMOS / MATERIAIS) */}
+      {/* ABA 3: TABELA DE VALORES (GESTÃO GLOBAL DE MATERIAIS) */}
       {/* ============================================================== */}
       {activeSubTab === 'tabela_valores' && (
         <div className="space-y-6">
@@ -2854,7 +2944,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
             {[
               {
                 label: 'Materiais Cadastrados',
-                value: `${tabelaValoresStats.total} insumos`,
+                value: `${tabelaValoresStats.total} materiais`,
                 icon: Package,
                 color: 'text-amber-400',
                 bg: 'bg-amber-500/10',
@@ -2870,7 +2960,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
               },
               {
                 label: 'Materiais em Uso',
-                value: `${tabelaValoresStats.insumosEmUso} insumos`,
+                value: `${tabelaValoresStats.insumosEmUso} materiais`,
                 sub: 'Vinculados a serviços ativos',
                 icon: Wrench,
                 color: 'text-blue-400',
@@ -2907,7 +2997,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
                 type="text"
                 value={tabelaSearch}
                 onChange={(e) => setTabelaSearch(e.target.value)}
-                placeholder="Buscar insumo por nome..."
+                placeholder="Buscar material por nome..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-800/60 border border-slate-700/60 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               />
             </div>
@@ -2932,7 +3022,7 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
             <div className="flex items-center justify-center py-20">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-                <p className="text-sm text-slate-400">Carregando tabela de insumos...</p>
+                <p className="text-sm text-slate-400">Carregando tabela de materiais...</p>
               </div>
             </div>
           ) : filteredTabelaMateriais.length > 0 ? (
@@ -3070,12 +3160,12 @@ export default function ServicosPage({ initialOrcamentoData = null, onClearIniti
             <div className="flex flex-col items-center justify-center py-20 text-center glass-card rounded-2xl border border-slate-800">
               <Package className="w-12 h-12 text-slate-600 mb-3" />
               <h3 className="text-lg font-semibold text-slate-400 mb-1">
-                {tabelaSearch || tabelaUnidadeFilter ? 'Nenhum insumo encontrado' : 'Tabela de valores vazia'}
+                {tabelaSearch || tabelaUnidadeFilter ? 'Nenhum material encontrado' : 'Tabela de valores vazia'}
               </h3>
               <p className="text-sm text-slate-500 mb-4">
                 {tabelaSearch || tabelaUnidadeFilter
                   ? 'Tente ajustar os filtros de busca.'
-                  : 'Nenhum insumo cadastrado na tabela de valores.'}
+                  : 'Nenhum material cadastrado na tabela de valores.'}
               </p>
               {!tabelaSearch && !tabelaUnidadeFilter && (
                 <button

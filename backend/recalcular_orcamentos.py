@@ -52,7 +52,12 @@ def main():
             try:
                 # Update subtotal items
                 for it in itens:
-                    supabase.table("orcamento_itens").update({"subtotal": it["subtotal"]}).eq("id", it["id"]).execute()
+                    update_data = {
+                        "subtotal": it["subtotal"],
+                        "custo_total": it.get("custo_total", 0.0),
+                        "lucro": it.get("lucro", 0.0)
+                    }
+                    supabase.table("orcamento_itens").update(update_data).eq("id", it["id"]).execute()
                     
                 # Update head
                 supabase.table("orcamentos").update({"subtotal": subtotal_novo, "valor_total": valor_total_novo}).eq("id", orc["id"]).execute()
