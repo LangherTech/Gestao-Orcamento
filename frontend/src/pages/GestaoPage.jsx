@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { formatTelefone, formatCPFouCNPJ } from '../utils/masks';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 export default function GestaoPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('terceiros'); // 'terceiros' | 'contratos'
@@ -29,6 +30,9 @@ export default function GestaoPage({ selectedObraId, obras = [], user }) {
   const [isContratoModalOpen, setIsContratoModalOpen] = useState(false);
   const [isMedicaoModalOpen, setIsMedicaoModalOpen] = useState(false);
   const [selectedContratoId, setSelectedContratoId] = useState(null);
+  
+  const [cancelingContrato, setCancelingContrato] = useState(null);
+  const [deletingContrato, setDeletingContrato] = useState(null);
 
   // Estados de formulário
   const initialEmpForm = {
@@ -212,13 +216,17 @@ export default function GestaoPage({ selectedObraId, obras = [], user }) {
 
   const handleUpdateContratoStatus = async (id, newStatus, arquivado) => {
     if (newStatus === 'cancelado') {
-      const confirm = window.confirm("ATENÇÃO: Cancelar o contrato é irreversível, estornará os pagamentos e o saldo voltará para a obra. Confirma?");
-      if (!confirm) return;
+      setCancelingContrato(id);
+      return;
     }
-    
+    await executeUpdateContratoStatus(id, newStatus, arquivado);
+  };
+
+  const executeUpdateContratoStatus = async (id, newStatus, arquivado) => {
     try {
       await api.patch(`/gestao/contratos/${id}/status`, { status: newStatus, arquivado });
       showToast(`Contrato ${newStatus === 'cancelado' ? 'cancelado' : 'atualizado'} com sucesso!`);
+      if (newStatus === 'cancelado') setCancelingContrato(null);
       fetchDados();
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
@@ -226,11 +234,16 @@ export default function GestaoPage({ selectedObraId, obras = [], user }) {
     }
   };
 
-  const handleDeleteContrato = async (id) => {
-    if (!window.confirm("Deseja realmente excluir este contrato?")) return;
+  const handleDeleteContrato = (id) => {
+    setDeletingContrato(id);
+  };
+
+  const executeDeleteContrato = async () => {
+    if (!deletingContrato) return;
     try {
-      await api.delete(`/gestao/contratos/${id}`);
+      await api.delete(`/gestao/contratos/${deletingContrato}`);
       showToast('Contrato excluído com sucesso!');
+      setDeletingContrato(null);
       fetchDados();
     } catch (err) {
       console.error("Erro ao excluir contrato:", err);
@@ -1246,6 +1259,25 @@ export default function GestaoPage({ selectedObraId, obras = [], user }) {
           </div>
         </div>
       )}
+      {/* MODAL: EXCLUSÃO DE CONTRATO */}
+      <ConfirmDeleteModal
+        isOpen={!!deletingContrato}
+        onClose={() => setDeletingContrato(null)}
+        onConfirm={executeDeleteContrato}
+        title="Confirmar Exclusão"
+        message="Deseja realmente excluir este contrato?"
+      />
+
+      {/* MODAL: CANCELAMENTO DE CONTRATO */}
+      <ConfirmDeleteModal
+        isOpen={!!cancelingContrato}
+        onClose={() => setCancelingContrato(null)}
+        onConfirm={() => executeUpdateContratoStatus(cancelingContrato, 'cancelado', false)}
+        title="Confirmar Cancelamento"
+        message="ATENÇÃO: Cancelar o contrato é irreversível, estornará os pagamentos e o saldo voltará para a obra. Confirma?"
+        confirmText="Sim, Cancelar Contrato"
+      />
+
     </div>
   );
 }

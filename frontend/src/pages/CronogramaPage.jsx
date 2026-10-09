@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { CalendarDays, Plus, CheckCircle, AlertCircle, RefreshCw, X, Edit, ListChecks, Trash2, Printer } from 'lucide-react';
 import api from '../services/api';
 import { exportCronogramaPDF, exportCronogramaTabelaPDF } from '../components/CronogramaPDF';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 export default function CronogramaPage({ selectedObraId, selectedObra, obras = [] }) {
   const [etapas, setEtapas] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [obraInfo, setObraInfo] = useState(null);
+  const [deletingEtapa, setDeletingEtapa] = useState(null);
 
   useEffect(() => {
     if (selectedObra) {
@@ -77,10 +79,15 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
     }
   };
 
-  const handleDeleteEtapa = async (id, nome) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a etapa "${nome}"?`)) return;
+  const handleDeleteEtapa = (id, nome) => {
+    setDeletingEtapa({ id, nome });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingEtapa) return;
     try {
-      await api.delete(`/cronograma/etapas/${id}`);
+      await api.delete(`/cronograma/etapas/${deletingEtapa.id}`);
+      setDeletingEtapa(null);
       fetchData();
     } catch (error) {
       console.error("Erro ao excluir etapa:", error);
@@ -336,6 +343,14 @@ export default function CronogramaPage({ selectedObraId, selectedObra, obras = [
           </div>
         </div>
       )}
+      <ConfirmDeleteModal
+        isOpen={!!deletingEtapa}
+        onClose={() => setDeletingEtapa(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirmar Exclusão"
+        message="Tem certeza que deseja excluir esta etapa do cronograma?"
+        itemName={deletingEtapa?.nome}
+      />
     </div>
   );
 }

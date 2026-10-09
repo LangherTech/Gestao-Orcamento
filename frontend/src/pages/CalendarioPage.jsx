@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { formatTelefone, formatCPF } from '../utils/masks';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 
 export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const [activeTab, setActiveTab] = useState('funcionarios'); // 'funcionarios' | 'profissoes' | 'alocacoes' | 'visao_mensal' | 'equipes' | 'pagamentos'
@@ -72,6 +73,8 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const [deletingFuncionario, setDeletingFuncionario] = useState(null);
   const [isDeleteAlocModalOpen, setIsDeleteAlocModalOpen] = useState(false);
   const [deletingAlocacao, setDeletingAlocacao] = useState(null);
+  const [deletingEquipe, setDeletingEquipe] = useState(null);
+  const [deletingPagamento, setDeletingPagamento] = useState(null);
 
   // Estados de formulário
   const initialFuncForm = {
@@ -510,23 +513,33 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
     }
   };
 
-  const handleConfirmDeleteEquipe = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta equipe?')) return;
+  const handleDeleteEquipe = (eq) => {
+    setDeletingEquipe(eq);
+  };
+
+  const handleConfirmDeleteEquipe = async () => {
+    if (!deletingEquipe) return;
     try {
-      await api.delete(`/calendario/equipes/${id}`);
+      await api.delete(`/calendario/equipes/${deletingEquipe.id}`);
       showToast('Equipe removida com sucesso.');
+      setDeletingEquipe(null);
       fetchData();
     } catch (err) {
       showToast('Erro ao excluir equipe.', 'error');
     }
   };
 
-  const handleConfirmDeletePagamento = async (id) => {
-    if (!window.confirm('Tem certeza que deseja excluir este pagamento?')) return;
+  const handleDeletePagamento = (pag) => {
+    setDeletingPagamento(pag);
+  };
+
+  const handleConfirmDeletePagamento = async () => {
+    if (!deletingPagamento) return;
     try {
-      await api.delete(`/calendario/pagamentos/${id}`);
+      await api.delete(`/calendario/pagamentos/${deletingPagamento.id}`);
       showToast('Pagamento removido com sucesso.');
-      setPagamentos(prev => prev.filter(p => p.id !== id));
+      setPagamentos(prev => prev.filter(p => p.id !== deletingPagamento.id));
+      setDeletingPagamento(null);
     } catch (err) {
       showToast('Erro ao excluir pagamento.', 'error');
     }
@@ -1709,7 +1722,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleConfirmDeleteEquipe(eq.id)}
+                      onClick={() => handleDeleteEquipe(eq)}
                       className="text-rose-400 hover:text-rose-300 p-2 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
                       title="Excluir Equipe"
                     >
@@ -1951,7 +1964,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                         {pag.created_by ? (pag.created_by === user?.id ? 'Você' : 'Sócio') : '-'}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button onClick={() => handleConfirmDeletePagamento(pag.id)} className="text-rose-400 hover:text-rose-300 p-1.5 bg-rose-500/10 rounded-lg">
+                        <button onClick={() => handleDeletePagamento(pag)} className="text-rose-400 hover:text-rose-300 p-1.5 bg-rose-500/10 rounded-lg">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -2876,6 +2889,23 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
           </div>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        isOpen={!!deletingEquipe}
+        onClose={() => setDeletingEquipe(null)}
+        onConfirm={handleConfirmDeleteEquipe}
+        title="Confirmar Exclusão de Equipe"
+        message="Tem certeza que deseja excluir esta equipe?"
+        itemName={deletingEquipe?.nome}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={!!deletingPagamento}
+        onClose={() => setDeletingPagamento(null)}
+        onConfirm={handleConfirmDeletePagamento}
+        title="Confirmar Exclusão de Pagamento"
+        message="Tem certeza que deseja excluir este pagamento?"
+      />
 
     </div>
   );
