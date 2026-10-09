@@ -25,6 +25,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
 
   // Modo de exibição do calendário mensal: 'geral' | 'por_obra' | 'por_colaborador'
   const [visaoModo, setVisaoModo] = useState('geral');
+  const [calendarioModo, setCalendarioModo] = useState('mensal'); // 'mensal' | 'semanal'
   const [visaoSelectedObra, setVisaoSelectedObra] = useState('');
   const [visaoSelectedColaborador, setVisaoSelectedColaborador] = useState('');
 
@@ -102,7 +103,8 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
 
   const initialEquipeForm = {
     nome: '',
-    lider_id: ''
+    lider_id: '',
+    membros: []
   };
   const [equipeForm, setEquipeForm] = useState(initialEquipeForm);
 
@@ -1532,9 +1534,26 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {equipes.map(eq => (
                 <div key={eq.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
-                  <div>
-                    <h4 className="text-lg font-bold text-white mb-2">{eq.nome}</h4>
-                    <p className="text-sm text-slate-400">Líder: {eq.lider?.nome || 'Sem líder'}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: eq.funcionarios?.cor || '#6366f1' }}></div>
+                      <h4 className="text-lg font-bold text-white">{eq.nome}</h4>
+                    </div>
+                    <p className="text-sm text-slate-400 font-semibold mb-2">Líder: <span style={{ color: eq.funcionarios?.cor || '#94a3b8' }}>{eq.funcionarios?.nome || 'Sem líder'}</span></p>
+                    <div className="text-xs text-slate-400">
+                      <span className="font-semibold block mb-1">Membros ({eq.membros?.length || 0}):</span>
+                      {eq.membros && eq.membros.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {eq.membros.map(m => (
+                            <span key={m.id} className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
+                              {m.nome}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-500 italic">Nenhum membro vinculado.</span>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-4 flex justify-end">
                     <button onClick={() => handleConfirmDeleteEquipe(eq.id)} className="text-rose-400 hover:text-rose-300 p-2 bg-rose-500/10 rounded-lg">
@@ -2344,6 +2363,32 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                       <option key={f.id} value={f.id}>{f.nome}</option>
                     ))}
                   </select>
+                </div>
+                
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Membros da Equipe</label>
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
+                    {funcionarios.filter(f => !f.lider).map(f => (
+                      <label key={f.id} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={equipeForm.membros.includes(f.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEquipeForm({...equipeForm, membros: [...equipeForm.membros, f.id]});
+                            } else {
+                              setEquipeForm({...equipeForm, membros: equipeForm.membros.filter(id => id !== f.id)});
+                            }
+                          }}
+                          className="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                        />
+                        {f.nome}
+                      </label>
+                    ))}
+                    {funcionarios.filter(f => !f.lider).length === 0 && (
+                      <p className="text-xs text-slate-500 text-center">Nenhum colaborador disponível.</p>
+                    )}
+                  </div>
                 </div>
               </form>
             </div>

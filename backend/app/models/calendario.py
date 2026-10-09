@@ -103,6 +103,7 @@ class AlocacaoResponse(AlocacaoBase):
 class EquipeBase(BaseModel):
     nome: str = Field(..., max_length=255)
     lider_id: Optional[UUID] = None
+    membros: Optional[List[UUID]] = []
 
 class EquipeResponse(EquipeBase):
     id: UUID

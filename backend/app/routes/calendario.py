@@ -497,8 +497,16 @@ async def list_equipes(user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         return []
-    res = supabase.table("equipes").select("*, funcionarios!fk_equipes_lider(nome, cor)").execute()
-    return res.data or []
+    res = supabase.table("equipes").select("*, funcionarios!fk_equipes_lider(nome, cor, id)").execute()
+    equipes = res.data or []
+    
+    res_func = supabase.table("funcionarios").select("id, nome, cargo, telefone, equipe_padrao_id").not_.is_("equipe_padrao_id", "null").execute()
+    funcs = res_func.data or []
+    
+    for eq in equipes:
+        eq["membros"] = [f for f in funcs if str(f.get("equipe_padrao_id")) == str(eq.get("id"))]
+        
+    return equipes
 
 @router.post("/equipes", response_model=dict, status_code=http_status.HTTP_201_CREATED)
 async def create_equipe(equipe: EquipeBase, user: dict = Depends(get_current_user)):
@@ -512,12 +520,23 @@ async def create_equipe(equipe: EquipeBase, user: dict = Depends(get_current_use
     if data.get("lider_id"):
         data["lider_id"] = str(data["lider_id"])
         
+    membros = data.pop("membros", [])
+        
     res = supabase.table("equipes").insert(data).execute()
-    return res.data[0] if res.data else {}
+    if res.data:
+        equipe_created = res.data[0]
+        equipe_id = equipe_created["id"]
+        if membros:
+            supabase.table("funcionarios").update({"equipe_padrao_id": equipe_id}).in_("id", [str(m) for m in membros]).execute()
+            
+        return equipe_created
+    return {}
 
 @router.delete("/equipes/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_equipe(id: UUID, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
+    # Atualiza funcionarios vinculados para remover a equipe
+    supabase.table("funcionarios").update({"equipe_padrao_id": None}).eq("equipe_padrao_id", str(id)).execute()
     supabase.table("equipes").delete().eq("id", str(id)).execute()
     return None
 
