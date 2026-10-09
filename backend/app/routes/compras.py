@@ -17,7 +17,7 @@ class FornecedorCreate(BaseModel):
     endereco: Optional[str] = None
 
 @router.get("/fornecedores", response_model=List[dict])
-async def list_fornecedores(user: dict = Depends(get_current_user)):
+def list_fornecedores(user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
@@ -25,7 +25,7 @@ async def list_fornecedores(user: dict = Depends(get_current_user)):
     return res.data
 
 @router.post("/fornecedores", response_model=dict)
-async def create_fornecedor(forn: FornecedorCreate, user: dict = Depends(get_current_user)):
+def create_fornecedor(forn: FornecedorCreate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
@@ -35,7 +35,7 @@ async def create_fornecedor(forn: FornecedorCreate, user: dict = Depends(get_cur
     return res.data[0]
 
 @router.get("/pedidos", response_model=List[dict])
-async def list_pedidos(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
+def list_pedidos(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         return []
@@ -56,7 +56,7 @@ async def list_pedidos(obra_id: Optional[UUID] = Query(None), user: dict = Depen
     return pedidos
 
 @router.post("/pedidos", response_model=dict)
-async def create_pedido(pedido: PedidoCompraCreate, user: dict = Depends(get_current_user)):
+def create_pedido(pedido: PedidoCompraCreate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
@@ -89,36 +89,13 @@ async def create_pedido(pedido: PedidoCompraCreate, user: dict = Depends(get_cur
     return novo_pedido
 
 @router.put("/pedidos/{id}/status")
-async def update_pedido_status(id: UUID, status: str = Query(...), user: dict = Depends(get_current_user)):
+def update_pedido_status(id: UUID, status: str = Query(...), user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
     if not supabase:
         raise HTTPException(status_code=500, detail="DB Error")
     
     data = {"status": status, "updated_at": datetime.now().isoformat()}
     res = supabase.table("pedidos_compra").update(data).eq("id", str(id)).execute()
-    pedido = res.data[0]
-
-    # Integração automática com o Financeiro (Caixa Pequeno) quando PAGO
-    if status == "pago":
-        # Verificar se já existe um lançamento para este pedido
-        ref_id = f"compra_{id}"
-        existente = supabase.table("caixa_pequeno").select("id").eq("referencia_id", ref_id).execute()
-        
-        if not existente.data:
-            # Buscar nome do fornecedor para a descrição
-            forn_res = supabase.table("fornecedores").select("nome").eq("id", pedido["fornecedor_id"]).execute()
-            fornecedor_nome = forn_res.data[0]["nome"] if forn_res.data else "Fornecedor"
-            
-            despesa = {
-                "obra_id": pedido["obra_id"],
-                "valor": float(pedido["valor_total"]),
-                "descricao": f"Pagamento Fornecedor ({fornecedor_nome}) - Pedido {pedido['numero']}",
-                "categoria": "Material",
-                "data": datetime.now().isoformat()[:10],
-                "status": "aprovado",
-                "referencia_id": ref_id,
-                "created_by": None if user.get("is_mock") else user.get("id")
-            }
-            supabase.table("caixa_pequeno").insert(despesa).execute()
-            
-    return pedido
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    return res.data[0]

@@ -36,11 +36,11 @@ def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_cu
     
     receita_recebida = sum(r["valor"] for r in receitas_res.data if r["status"] == "recebido")
     receita_prevista = sum(o["valor_aprovado"] or 0 for o in obras_res.data) if obras_res.data else 0
-    despesa_caixa_pequeno = sum(c["valor"] for c in caixa_res.data if c["status"] == "aprovado" and not (c.get("referencia_id") or "").startswith("compra_"))
+    despesa_caixa_pequeno = sum(c["valor"] for c in caixa_res.data if c["status"] == "aprovado")
     despesa_funcionarios = sum(f["valor_pago"] for f in funcionarios_res.data)
     
-    # Mock some data for components not yet implemented (empreiteiros)
-    despesa_compras = sum(c.get("valor_total") or 0 for c in compras_res.data if c.get("status") in ["aprovado", "pago", "entregue"])
+    # Compras de materiais e insumos (pedidos aprovados, recebidos ou pagos)
+    despesa_compras = sum(c.get("valor_total") or 0 for c in compras_res.data if c.get("status") in ["aprovado", "recebido", "pago", "entregue"])
     despesa_empreiteiros = 0
     despesa_total = despesa_caixa_pequeno + despesa_compras + despesa_empreiteiros + despesa_funcionarios
     saldo_operacional = receita_recebida - despesa_total
