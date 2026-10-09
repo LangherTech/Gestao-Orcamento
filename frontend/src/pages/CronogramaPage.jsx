@@ -12,7 +12,8 @@ export default function CronogramaPage({ selectedObraId }) {
   const [formEtapa, setFormEtapa] = useState({
     nome: '',
     data_prevista_inicio: '',
-    data_prevista_fim: ''
+    data_prevista_fim: '',
+    etapa_pai_id: null
   });
 
   const fetchData = async () => {
@@ -40,10 +41,11 @@ export default function CronogramaPage({ selectedObraId }) {
         obra_id: selectedObraId,
         nome: formEtapa.nome,
         data_prevista_inicio: formEtapa.data_prevista_inicio || null,
-        data_prevista_fim: formEtapa.data_prevista_fim || null
+        data_prevista_fim: formEtapa.data_prevista_fim || null,
+        etapa_pai_id: formEtapa.etapa_pai_id || null
       });
       setIsModalOpen(false);
-      setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '' });
+      setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '', etapa_pai_id: null });
       fetchData();
     } catch (error) {
       console.error("Erro ao criar etapa:", error);
@@ -132,7 +134,10 @@ export default function CronogramaPage({ selectedObraId }) {
             </button>
           </div>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '', etapa_pai_id: null });
+              setIsModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -155,42 +160,99 @@ export default function CronogramaPage({ selectedObraId }) {
           </div>
         )}
 
-        {etapas.map((etapa) => {
+        {etapas.filter(e => !e.etapa_pai_id).map((etapa) => {
+          const subEtapas = etapas.filter(sub => sub.etapa_pai_id === etapa.id);
           const status = getStatus(etapa);
           return (
-            <div key={etapa.id} className="glass-card p-5 rounded-2xl hover:border-slate-700/80 transition-colors group">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md ${status.class}`}>
-                      {status.label}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      Prazo: {formatDate(etapa.data_prevista_inicio)} até {formatDate(etapa.data_prevista_fim)}
-                    </span>
+            <div key={etapa.id} className="space-y-2">
+              <div className="glass-card p-5 rounded-2xl hover:border-slate-700/80 transition-colors group">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md ${status.class}`}>
+                        {status.label}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        Prazo: {formatDate(etapa.data_prevista_inicio)} até {formatDate(etapa.data_prevista_fim)}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-white">{etapa.nome}</h3>
                   </div>
-                  <h3 className="text-base font-bold text-white">{etapa.nome}</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!etapa.data_real_inicio && !etapa.data_real_fim && (
-                    <button onClick={() => handleToggleEtapaStatus(etapa.id, true, false)} className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
-                      Iniciar
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setFormEtapa({ nome: '', data_prevista_inicio: '', data_prevista_fim: '', etapa_pai_id: etapa.id });
+                        setIsModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Sub-etapa
                     </button>
-                  )}
-                  {etapa.data_real_inicio && !etapa.data_real_fim && (
-                    <button onClick={() => handleToggleEtapaStatus(etapa.id, false, true)} className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
-                      Concluir
+                    {!etapa.data_real_inicio && !etapa.data_real_fim && (
+                      <button onClick={() => handleToggleEtapaStatus(etapa.id, true, false)} className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                        Iniciar
+                      </button>
+                    )}
+                    {etapa.data_real_inicio && !etapa.data_real_fim && (
+                      <button onClick={() => handleToggleEtapaStatus(etapa.id, false, true)} className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                        Concluir
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteEtapa(etapa.id, etapa.nome)}
+                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      title="Excluir Etapa"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteEtapa(etapa.id, etapa.nome)}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                    title="Excluir Etapa"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  </div>
                 </div>
               </div>
+              
+              {/* Sub-etapas */}
+              {subEtapas.length > 0 && (
+                <div className="pl-8 space-y-2 relative before:absolute before:left-4 before:top-0 before:bottom-4 before:w-px before:bg-slate-800">
+                  {subEtapas.map(sub => {
+                    const subStatus = getStatus(sub);
+                    return (
+                      <div key={sub.id} className="relative before:absolute before:left-[-1rem] before:top-1/2 before:w-4 before:h-px before:bg-slate-800 glass-card p-4 rounded-xl hover:border-slate-700/80 transition-colors group">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md ${subStatus.class}`}>
+                                {subStatus.label}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                Prazo: {formatDate(sub.data_prevista_inicio)} até {formatDate(sub.data_prevista_fim)}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-semibold text-slate-200">{sub.nome}</h4>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!sub.data_real_inicio && !sub.data_real_fim && (
+                              <button onClick={() => handleToggleEtapaStatus(sub.id, true, false)} className="px-2 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                                Iniciar
+                              </button>
+                            )}
+                            {sub.data_real_inicio && !sub.data_real_fim && (
+                              <button onClick={() => handleToggleEtapaStatus(sub.id, false, true)} className="px-2 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-bold rounded-lg transition-colors cursor-pointer">
+                                Concluir
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteEtapa(sub.id, sub.nome)}
+                              className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                              title="Excluir Sub-etapa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -201,7 +263,7 @@ export default function CronogramaPage({ selectedObraId }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between p-4 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-white">Adicionar Etapa</h3>
+              <h3 className="text-lg font-bold text-white">{formEtapa.etapa_pai_id ? 'Adicionar Sub-etapa' : 'Adicionar Etapa'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
