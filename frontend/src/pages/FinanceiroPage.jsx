@@ -7,7 +7,6 @@ export default function FinanceiroPage({ selectedObraId, obras, user }) {
   const [fluxo, setFluxo] = useState(null);
   const [receitas, setReceitas] = useState([]);
   const [caixaPequeno, setCaixaPequeno] = useState([]);
-  const [orcadoVsRealizado, setOrcadoVsRealizado] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Modals state
@@ -32,16 +31,14 @@ export default function FinanceiroPage({ selectedObraId, obras, user }) {
     setIsLoading(true);
     try {
       const queryParam = selectedObraId ? `?obra_id=${selectedObraId}` : '';
-      const [fluxoRes, receitasRes, caixaRes, orcadoRes] = await Promise.all([
+      const [fluxoRes, receitasRes, caixaRes] = await Promise.all([
         api.get(`/financeiro/fluxo${queryParam}`),
         api.get(`/financeiro/receitas${queryParam}`),
-        api.get(`/financeiro/caixa-pequeno${queryParam}`),
-        api.get(`/dashboards/orcado-vs-realizado${queryParam}`)
+        api.get(`/financeiro/caixa-pequeno${queryParam}`)
       ]);
       setFluxo(fluxoRes.data);
       setReceitas(receitasRes.data);
       setCaixaPequeno(caixaRes.data);
-      setOrcadoVsRealizado(orcadoRes.data);
     } catch (error) {
       console.error("Erro ao buscar dados financeiros:", error);
     } finally {

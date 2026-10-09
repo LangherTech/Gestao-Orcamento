@@ -9,7 +9,7 @@ from datetime import datetime
 router = APIRouter(prefix="/financeiro", tags=["Financeiro"])
 
 @router.get("/fluxo", response_model=dict)
-async def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
+def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
     """Retorna o resumo do fluxo de caixa e centros de custo por obra."""
     supabase = get_supabase_client()
     if not supabase:
@@ -63,7 +63,7 @@ async def get_fluxo(obra_id: Optional[UUID] = Query(None), user: dict = Depends(
     }
 
 @router.get("/receitas", response_model=List[dict])
-async def list_receitas(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
+def list_receitas(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
     """Lista receitas e faturamentos."""
     supabase = get_supabase_client()
     if not supabase:
@@ -77,7 +77,7 @@ async def list_receitas(obra_id: Optional[UUID] = Query(None), user: dict = Depe
     return res.data
 
 @router.post("/receitas", response_model=dict)
-async def create_receita(item: ReceitaCreate, user: dict = Depends(get_current_user)):
+def create_receita(item: ReceitaCreate, user: dict = Depends(get_current_user)):
     """Lança um novo recebimento."""
     supabase = get_supabase_client()
     if not supabase:
@@ -91,7 +91,7 @@ async def create_receita(item: ReceitaCreate, user: dict = Depends(get_current_u
     return res.data[0]
 
 @router.get("/caixa-pequeno", response_model=List[dict])
-async def list_caixa_pequeno(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
+def list_caixa_pequeno(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
     """Lista as despesas imediatas de canteiro."""
     supabase = get_supabase_client()
     if not supabase:
@@ -105,7 +105,7 @@ async def list_caixa_pequeno(obra_id: Optional[UUID] = Query(None), user: dict =
     return res.data
 
 @router.post("/caixa-pequeno", response_model=dict)
-async def create_caixa_pequeno(item: CaixaPequenoCreate, user: dict = Depends(get_current_user)):
+def create_caixa_pequeno(item: CaixaPequenoCreate, user: dict = Depends(get_current_user)):
     """Registra uma nova despesa no caixa pequeno de obra."""
     supabase = get_supabase_client()
     if not supabase:
@@ -120,7 +120,7 @@ async def create_caixa_pequeno(item: CaixaPequenoCreate, user: dict = Depends(ge
     return res.data[0]
 
 @router.put("/caixa-pequeno/{id}", response_model=dict)
-async def approve_caixa_pequeno(id: UUID, status: str = Query(..., description="aprovado, pendente_aprovacao"), user: dict = Depends(get_current_user)):
+def approve_caixa_pequeno(id: UUID, status: str = Query(..., description="aprovado, pendente_aprovacao"), user: dict = Depends(get_current_user)):
     """Aprova ou reprova despesa de caixa pequeno."""
     supabase = get_supabase_client()
     if not supabase:
@@ -138,6 +138,6 @@ async def approve_caixa_pequeno(id: UUID, status: str = Query(..., description="
     raise HTTPException(status_code=404, detail="Despesa não encontrada")
 
 @router.get("/orcado-x-realizado", response_model=dict)
-async def get_orcado_realizado(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
+def get_orcado_realizado(obra_id: Optional[UUID] = Query(None), user: dict = Depends(get_current_user)):
     """Comparativo de orçado vs realizado."""
     return get_fluxo(obra_id=obra_id, user=user)
