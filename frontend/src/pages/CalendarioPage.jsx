@@ -105,6 +105,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const [alocForm, setAlocForm] = useState(initialAlocForm);
 
   const initialEquipeForm = {
+    id: null,
     nome: '',
     lider_id: '',
     membros: []
@@ -446,8 +447,17 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
   const handleSaveEquipe = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/calendario/equipes', equipeForm);
-      showToast('Equipe registrada com sucesso!');
+      const payload = {
+        ...equipeForm,
+        lider_id: equipeForm.lider_id || null
+      };
+      if (equipeForm.id) {
+        await api.put(`/calendario/equipes/${equipeForm.id}`, payload);
+        showToast('Equipe atualizada com sucesso!');
+      } else {
+        await api.post('/calendario/equipes', payload);
+        showToast('Equipe registrada com sucesso!');
+      }
       setShowModal(false);
       setEquipeForm(initialEquipeForm);
       fetchData();
@@ -459,6 +469,17 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
       }
       showToast(detail || 'Erro ao registrar equipe.', 'error');
     }
+  };
+
+  const handleEditEquipe = (eq) => {
+    setEquipeForm({
+      id: eq.id,
+      nome: eq.nome || '',
+      lider_id: eq.lider_id || eq.funcionarios?.id || '',
+      membros: (eq.membros || []).map(m => String(m.id))
+    });
+    setModalType('equipe');
+    setShowModal(true);
   };
 
   const handleSavePagamento = async (e) => {
@@ -1679,8 +1700,19 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                       )}
                     </div>
                   </div>
-                  <div className="mt-4 flex justify-end">
-                    <button onClick={() => handleConfirmDeleteEquipe(eq.id)} className="text-rose-400 hover:text-rose-300 p-2 bg-rose-500/10 rounded-lg">
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      onClick={() => handleEditEquipe(eq)}
+                      className="text-indigo-400 hover:text-indigo-300 p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
+                      title="Editar Equipe"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleConfirmDeleteEquipe(eq.id)}
+                      className="text-rose-400 hover:text-rose-300 p-2 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
+                      title="Excluir Equipe"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -2539,7 +2571,9 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Briefcase className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white">Cadastrar Equipe</h3>
+                <h3 className="text-base font-bold text-white">
+                  {equipeForm.id ? 'Editar Equipe' : 'Cadastrar Equipe'}
+                </h3>
               </div>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -2577,16 +2611,16 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                 <div>
                   <label className="text-xs font-semibold text-slate-300 mb-1.5 block">Membros da Equipe</label>
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2">
-                    {funcionarios.filter(f => !f.lider).map(f => (
+                    {funcionarios.filter(f => !f.lider && f.id !== equipeForm.lider_id).map(f => (
                       <label key={f.id} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={equipeForm.membros.includes(f.id)}
+                          checked={equipeForm.membros.map(String).includes(String(f.id))}
                           onChange={(e) => {
                             if (e.target.checked) {
                               setEquipeForm({...equipeForm, membros: [...equipeForm.membros, f.id]});
                             } else {
-                              setEquipeForm({...equipeForm, membros: equipeForm.membros.filter(id => id !== f.id)});
+                              setEquipeForm({...equipeForm, membros: equipeForm.membros.filter(id => String(id) !== String(f.id))});
                             }
                           }}
                           className="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
@@ -2594,7 +2628,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                         {f.nome}
                       </label>
                     ))}
-                    {funcionarios.filter(f => !f.lider).length === 0 && (
+                    {funcionarios.filter(f => !f.lider && f.id !== equipeForm.lider_id).length === 0 && (
                       <p className="text-xs text-slate-500 text-center">Nenhum colaborador disponível.</p>
                     )}
                   </div>
@@ -2615,7 +2649,7 @@ export default function CalendarioPage({ selectedObraId, obras = [], user }) {
                 form="equipe-form"
                 className="px-5 py-2 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all"
               >
-                Salvar Equipe
+                {equipeForm.id ? 'Salvar Alterações' : 'Salvar Equipe'}
               </button>
             </div>
           </div>

@@ -118,6 +118,13 @@ class EquipeBase(BaseModel):
     lider_id: Optional[UUID] = None
     membros: Optional[List[UUID]] = []
 
+    @field_validator("lider_id", mode="before")
+    @classmethod
+    def parse_lider_id(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
 class EquipeResponse(EquipeBase):
     id: UUID
     created_at: Optional[datetime] = None

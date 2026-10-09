@@ -597,6 +597,35 @@ async def create_equipe(equipe: EquipeBase, user: dict = Depends(get_current_use
         return equipe_created
     return {}
 
+@router.put("/equipes/{id}", response_model=dict)
+async def update_equipe(id: UUID, equipe: EquipeBase, user: dict = Depends(get_current_user)):
+    supabase = get_supabase_client()
+    data = equipe.model_dump(mode="json")
+    data.pop("created_by", None)
+    
+    if data.get("lider_id"):
+        data["lider_id"] = str(data["lider_id"])
+    else:
+        data["lider_id"] = None
+        
+    membros = data.pop("membros", [])
+    
+    res = supabase.table("equipes").update({
+        "nome": data.get("nome"),
+        "lider_id": data.get("lider_id")
+    }).eq("id", str(id)).execute()
+    
+    # 1. Limpa vínculo antigo dos colaboradores vinculados a esta equipe
+    supabase.table("funcionarios").update({"equipe_padrao_id": None}).eq("equipe_padrao_id", str(id)).execute()
+    
+    # 2. Vincula novos colaboradores selecionados
+    if membros:
+        supabase.table("funcionarios").update({"equipe_padrao_id": str(id)}).in_("id", [str(m) for m in membros]).execute()
+        
+    if res.data:
+        return res.data[0]
+    return {"id": str(id), **data}
+
 @router.delete("/equipes/{id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_equipe(id: UUID, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
